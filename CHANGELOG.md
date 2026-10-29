@@ -1,3 +1,9 @@
+## [1.0.1](https://github.com/southstar21dev/instagram-liquid-glass/compare/v1.0.0...v1.0.1) (2026-10-29)
+
+### 🐛 Bug Fixes
+
+* Progressive blur under the tab bar and keep Reels UI clear of it ([167930e](https://github.com/southstar21dev/instagram-liquid-glass/commit/167930e6805c4e414c4b1376c8ee93efe9f79264))
+
 ## 1.0.0 (2026-10-29)
 
 ### ✨ New Features

@@ -1,7 +1,7 @@
 {
-  "created_at": "2026-10-29T23:12:59",
-  "description": "## 1.0.0 (2026-10-29)\n\n### ✨ New Features\n\n* Liquid Glass navigation bar for Instagram ([da3155a](https://github.com/southstar21dev/instagram-liquid-glass/commit/da3155ad4443a868a19dabd99fe87106a6f899e2))",
-  "download_url": "https://github.com/southstar21dev/instagram-liquid-glass/releases/download/v1.0.0/patches-1.0.0.mpp",
+  "created_at": "2026-10-29T23:25:44",
+  "description": "## [1.0.1](https://github.com/southstar21dev/instagram-liquid-glass/compare/v1.0.0...v1.0.1) (2026-10-29)\n\n### 🐛 Bug Fixes\n\n* Progressive blur under the tab bar and keep Reels UI clear of it ([167930e](https://github.com/southstar21dev/instagram-liquid-glass/commit/167930e6805c4e414c4b1376c8ee93efe9f79264))",
+  "download_url": "https://github.com/southstar21dev/instagram-liquid-glass/releases/download/v1.0.1/patches-1.0.1.mpp",
   "signature_download_url": "",
-  "version": "1.0.0"
+  "version": "1.0.1"
 }
