@@ -255,6 +255,8 @@ final class LiquidGlassDrawable extends Drawable {
             for (int i = 0; i < hostIndex; i++) {
                 View child = parent.getChildAt(i);
                 if (child.getVisibility() != View.VISIBLE || child.getAlpha() == 0f) continue;
+                // The edge blur sits between content and bar; the glass blurs on its own.
+                if (child instanceof EdgeBlurView) continue;
                 if (!intersects(child, originX - pad, originY - pad, w, h)) continue;
                 int save = rc.save();
                 rc.translate(child.getLeft() + child.getTranslationX(), child.getTop() + child.getTranslationY());

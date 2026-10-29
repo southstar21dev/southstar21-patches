@@ -34,6 +34,10 @@ final class LiquidGlassController implements ViewTreeObserver.OnPreDrawListener 
     private final boolean extendContent;
     private final LiquidGlassDrawable glass;
     private final LiquidGlassLens lens;
+    private final EdgeBlurView edge;
+    private final int reelsTabId;
+    /** Siblings whose bottom margin reserves room for the tab bar, and which we now manage. */
+    private final java.util.WeakHashMap<View, Boolean> managedContent = new java.util.WeakHashMap<>();
     private final BackdropSampler sampler;
     private final android.graphics.Rect sampleRect = new android.graphics.Rect();
     private final float density;
@@ -53,6 +57,8 @@ final class LiquidGlassController implements ViewTreeObserver.OnPreDrawListener 
         this.density = bar.getResources().getDisplayMetrics().density;
         this.glass = new LiquidGlassDrawable(bar, density, blurRadiusDp, refractionPercent);
         this.lens = new LiquidGlassLens(bar.getContext(), bar, glass, density);
+        this.edge = new EdgeBlurView(bar.getContext(), density);
+        this.reelsTabId = bar.getResources().getIdentifier("clips_tab", "id", "com.instagram.android");
         this.sampler = new BackdropSampler(bar, glass::setBackdropLuminance);
     }
 
@@ -67,7 +73,9 @@ final class LiquidGlassController implements ViewTreeObserver.OnPreDrawListener 
         bar.setClipToPadding(false);
 
         ViewGroup parent = (ViewGroup) bar.getParent();
-        parent.addView(lens, parent.indexOfChild(bar) + 1, lensLayoutParams());
+        parent.addView(lens, parent.indexOfChild(bar) + 1, overlayLayoutParams(lens.extraTop));
+        // Directly below the bar, above the content it blurs.
+        parent.addView(edge, parent.indexOfChild(bar), overlayLayoutParams(edge.extraTop));
 
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
             // Soft system shadow cast by the pill outline. The glass is opaque on 12+, so the
@@ -105,9 +113,10 @@ final class LiquidGlassController implements ViewTreeObserver.OnPreDrawListener 
         enforce();
     }
 
-    private ViewGroup.LayoutParams lensLayoutParams() {
+    /** Layout params matching the bar's position, extended upwards by {@code extraTop}. */
+    private ViewGroup.LayoutParams overlayLayoutParams(int extraTop) {
         ViewGroup.LayoutParams barLp = bar.getLayoutParams();
-        int height = barLp.height > 0 ? barLp.height + lens.extraTop : ViewGroup.LayoutParams.WRAP_CONTENT;
+        int height = barLp.height > 0 ? barLp.height + extraTop : ViewGroup.LayoutParams.WRAP_CONTENT;
         if (barLp instanceof FrameLayout.LayoutParams) {
             FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams((FrameLayout.LayoutParams) barLp);
             lp.height = height;
@@ -131,6 +140,7 @@ final class LiquidGlassController implements ViewTreeObserver.OnPreDrawListener 
                 glass.invalidateSelf();
             }
             lens.sync();
+            syncEdge();
             // The popped-out lens covers the sample strip, so skip sampling while it's up.
             if (bar.getVisibility() == View.VISIBLE && !lens.isLensActive()) {
                 glass.getPill().round(sampleRect);
@@ -209,6 +219,10 @@ final class LiquidGlassController implements ViewTreeObserver.OnPreDrawListener 
             ViewGroup.LayoutParams lensLp = lens.getLayoutParams();
             lensLp.height = appliedHeight + lens.extraTop;
             lens.setLayoutParams(lensLp);
+
+            ViewGroup.LayoutParams edgeLp = edge.getLayoutParams();
+            edgeLp.height = appliedHeight + edge.extraTop;
+            edge.setLayoutParams(edgeLp);
         }
 
         if (appliedForWidth == width) return;
@@ -231,22 +245,53 @@ final class LiquidGlassController implements ViewTreeObserver.OnPreDrawListener 
     }
 
     /**
+     * Reels draws its username, caption and buttons right above the tab bar, so they must not
+     * end up behind the pill. Everywhere else content scrolls underneath the glass.
+     */
+    private boolean contentBehindBar() {
+        return extendContent && !isReelsSelected();
+    }
+
+    private boolean isReelsSelected() {
+        if (reelsTabId == 0) return false;
+        for (int i = 0; i < bar.getChildCount(); i++) {
+            View child = bar.getChildAt(i);
+            if (child.getId() == reelsTabId) return child.isSelected() || child.isActivated();
+        }
+        return false;
+    }
+
+    private void syncEdge() {
+        int visibility = bar.getVisibility() == View.VISIBLE && contentBehindBar() ? View.VISIBLE : View.GONE;
+        if (edge.getVisibility() != visibility) edge.setVisibility(visibility);
+        if (visibility != View.VISIBLE) return;
+        if (edge.getTranslationY() != bar.getTranslationY()) edge.setTranslationY(bar.getTranslationY());
+        if (edge.getAlpha() != bar.getAlpha()) edge.setAlpha(bar.getAlpha());
+        edge.setDark(glass.isDark());
+        edge.invalidate();
+    }
+
+    /**
      * Siblings under the bar (the main container, and the ViewPager2 holding the feed) stop
      * at the top of the tab bar with a bottom margin equal to its height, some set in XML and
-     * some in code. Drop those margins so content scrolls underneath the glass.
+     * some in code. Drop those margins so content scrolls underneath the glass, or grow them
+     * to the taller floating bar where content must stay clear of it.
      */
     private void enforceContentMargins() {
-        if (!extendContent || baseHeight <= 0) return;
+        if (baseHeight <= 0) return;
+        int target = contentBehindBar() ? 0 : appliedHeight;
         ViewGroup parent = (ViewGroup) bar.getParent();
         int barIndex = parent.indexOfChild(bar);
         for (int i = 0; i < barIndex; i++) {
             View child = parent.getChildAt(i);
-            if (child == shadow) continue;
+            if (child == shadow || child == edge) continue;
             if (!(child.getLayoutParams() instanceof ViewGroup.MarginLayoutParams)) continue;
             ViewGroup.MarginLayoutParams lp = (ViewGroup.MarginLayoutParams) child.getLayoutParams();
-            // Only undo the tab bar margin, leave other margins Instagram may set alone.
-            if (lp.bottomMargin == baseHeight) {
-                lp.bottomMargin = 0;
+            // Only take over the tab bar margin, leave other margins Instagram may set alone.
+            if (lp.bottomMargin == baseHeight) managedContent.put(child, Boolean.TRUE);
+            if (!managedContent.containsKey(child)) continue;
+            if (lp.bottomMargin != target) {
+                lp.bottomMargin = target;
                 child.setLayoutParams(lp);
             }
         }
