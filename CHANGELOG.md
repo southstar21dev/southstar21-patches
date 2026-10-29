@@ -1,3 +1,9 @@
+## [1.0.2](https://github.com/southstar21dev/instagram-liquid-glass/compare/v1.0.1...v1.0.2) (2026-10-29)
+
+### 🐛 Bug Fixes
+
+* Keep the selection lens inside the tab bar ([5deb458](https://github.com/southstar21dev/instagram-liquid-glass/commit/5deb45897515f6e2bfa6152af4e48b4bfd794224))
+
 ## [1.0.1](https://github.com/southstar21dev/instagram-liquid-glass/compare/v1.0.0...v1.0.1) (2026-10-29)
 
 ### 🐛 Bug Fixes
