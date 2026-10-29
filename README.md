@@ -3,7 +3,7 @@
 A [Morphe](https://morphe.software) patch that brings the iOS 26 Liquid Glass tab bar to Instagram for Android.
 
 - **Floating glass pill** with live background blur, edge refraction, chromatic fringe and a specular rim (Android 13+).
-- **Glass selection droplet**: press a tab and the lens pops out of the bar and magnifies the icon; drag to glide it across tabs (it stretches with speed) and release to open the tab underneath.
+- **Glass selection droplet**: press a tab and the lens swells inside the bar and magnifies the icon; drag to glide it across tabs (it stretches with speed) and release to open the tab underneath.
 - **Adaptive tint**: the glass frosts more over content that would make the icons hard to read, and turns dark on Reels and in dark mode.
 - Taps, double taps and long presses on the tabs still go to Instagram untouched.
 

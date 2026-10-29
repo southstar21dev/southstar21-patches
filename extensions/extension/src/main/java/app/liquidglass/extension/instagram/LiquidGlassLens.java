@@ -22,10 +22,10 @@ import android.view.ViewGroup;
 /**
  * The iOS 26 selection "droplet", drawn in a view stacked above the tab bar.
  * <p>
- * At rest it's a soft capsule behind the selected tab. When pressed it pops out of the bar
+ * At rest it's a soft capsule behind the selected tab. When pressed it swells within the pill
  * as a clear magnifying lens; dragging glides it across the tabs (stretching with speed)
  * and releasing snaps it to the nearest tab and opens it. Plain taps, double taps and
- * long presses are forwarded to the real tab bar untouched.
+ * long presses go to the real tab bar untouched.
  */
 @SuppressLint({"NewApi", "ViewConstructor"})
 final class LiquidGlassLens extends View {
@@ -85,7 +85,7 @@ final class LiquidGlassLens extends View {
     private final ViewGroup bar;
     private final LiquidGlassDrawable glass;
     private final float density;
-    /** Room above the bar so the pressed lens can pop out of the pill. */
+    /** Extra height above the bar; zero now that the lens stays inside the pill. */
     final int extraTop;
     private final int touchSlop;
 
@@ -115,7 +115,7 @@ final class LiquidGlassLens extends View {
         this.bar = bar;
         this.glass = glass;
         this.density = density;
-        this.extraTop = Math.round(14 * density);
+        this.extraTop = 0;
         this.touchSlop = ViewConfiguration.get(context).getScaledTouchSlop();
         setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
         setWillNotDraw(false);
@@ -181,10 +181,6 @@ final class LiquidGlassLens extends View {
 
     boolean isDragging() {
         return dragging;
-    }
-
-    boolean isLensActive() {
-        return tracking || press.value > 0.02f;
     }
 
     private View tabAt(float lensX) {
@@ -299,16 +295,21 @@ final class LiquidGlassLens extends View {
         step();
 
         float p = Math.max(0f, press.value);
+        // Like iOS, the droplet swells when pressed but never leaves the pill.
+        float inset = 3 * density;
+        float maxW = pill.width() - 2 * inset;
+        float maxH = pill.height() - 2 * inset;
         float restW = currentRestWidth();
         float restH = pill.height() - 8 * density;
-        float pressedW = restW * 1.28f;
-        float pressedH = pill.height() + 16 * density;
+        float pressedW = restW * 1.12f;
 
         float stretch = width.value;
-        float w = lerp(restW, pressedW, p) * stretch;
-        float h = lerp(restH, pressedH, p) / (float) Math.sqrt(stretch);
+        float grow = Math.min(p, 1f);
+        float w = Math.min(lerp(restW, pressedW, grow) * stretch, maxW);
+        float h = Math.min(lerp(restH, maxH, grow) / (float) Math.sqrt(stretch), maxH);
+        float cx = Math.max(pill.left + inset + w / 2f, Math.min(pill.right - inset - w / 2f, x.value));
         float cy = pill.centerY();
-        lens.set(x.value - w / 2f, cy - h / 2f, x.value + w / 2f, cy + h / 2f);
+        lens.set(cx - w / 2f, cy - h / 2f, cx + w / 2f, cy + h / 2f);
         float r = h / 2f;
 
         boolean dark = glass.isDark();

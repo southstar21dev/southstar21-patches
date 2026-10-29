@@ -141,8 +141,7 @@ final class LiquidGlassController implements ViewTreeObserver.OnPreDrawListener 
             }
             lens.sync();
             syncEdge();
-            // The popped-out lens covers the sample strip, so skip sampling while it's up.
-            if (bar.getVisibility() == View.VISIBLE && !lens.isLensActive()) {
+            if (bar.getVisibility() == View.VISIBLE) {
                 glass.getPill().round(sampleRect);
                 sampler.maybeSample(sampleRect, dp(20));
             }
