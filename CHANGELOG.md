@@ -1,3 +1,5 @@
+## [1.1.1](https://github.com/southstar21dev/southstar21-patches/compare/v1.1.0...v1.1.1) (2026-10-30)
+
 ## [1.1.0](https://github.com/southstar21dev/instagram-liquid-glass/compare/v1.0.2...v1.1.0) (2026-10-30)
 
 ### ✨ New Features
