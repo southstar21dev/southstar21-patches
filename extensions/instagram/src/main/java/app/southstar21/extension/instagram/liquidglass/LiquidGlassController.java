@@ -57,7 +57,9 @@ final class LiquidGlassController implements ViewTreeObserver.OnPreDrawListener 
         this.density = bar.getResources().getDisplayMetrics().density;
         this.glass = new LiquidGlassDrawable(bar, density, blurRadiusDp, refractionPercent);
         this.lens = new LiquidGlassLens(bar.getContext(), bar, glass, density);
-        this.headers = new HeaderGlassController(bar.getRootView(), density);
+        this.headers = LiquidGlassNavBarPatch.HEADER_GLASS.get()
+                ? new HeaderGlassController(bar.getRootView(), density)
+                : null;
         this.reelsTabId = bar.getResources().getIdentifier("clips_tab", "id", "com.instagram.android");
         this.sampler = new BackdropSampler(bar, glass::setBackdropLuminance);
     }
@@ -138,8 +140,10 @@ final class LiquidGlassController implements ViewTreeObserver.OnPreDrawListener 
                 glass.invalidateSelf();
             }
             lens.sync();
-            headers.setDark(glassDarkForHeaders());
-            headers.onPreDraw();
+            if (headers != null) {
+                headers.setDark(glassDarkForHeaders());
+                headers.onPreDraw();
+            }
             if (bar.getVisibility() == View.VISIBLE) {
                 glass.getPill().round(sampleRect);
                 sampler.maybeSample(sampleRect, dp(20));

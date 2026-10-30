@@ -1,13 +1,12 @@
 package app.southstar21.patches.instagram.layout.liquidglass
 
-import app.morphe.patcher.extensions.InstructionExtensions.addInstruction
 import app.morphe.patcher.extensions.InstructionExtensions.addInstructions
 import app.morphe.patcher.patch.booleanOption
 import app.morphe.patcher.patch.bytecodePatch
 import app.morphe.patcher.patch.intOption
+import app.southstar21.patches.instagram.misc.extension.markPatchIncluded
 import app.southstar21.patches.instagram.misc.extension.sharedExtensionPatch
 import app.southstar21.patches.instagram.shared.Constants.COMPATIBILITY_INSTAGRAM
-import app.southstar21.patches.instagram.shared.MainActivityWindowFocusFingerprint
 
 @Suppress("unused")
 val liquidGlassNavBarPatch = bytecodePatch(
@@ -82,9 +81,6 @@ val liquidGlassNavBarPatch = bytecodePatch(
             """
         )
 
-        MainActivityWindowFocusFingerprint.method.addInstruction(
-            0,
-            "invoke-static { p0 }, $EXTENSION_CLASS->onWindowFocusChanged(Landroid/app/Activity;)V"
-        )
+        markPatchIncluded(EXTENSION_CLASS)
     }
 }

@@ -82,6 +82,17 @@ extensions/<app>/        Java code injected into the app, one Gradle module per 
 3. Put its extension code in `extensions/<app>/src/main/java/app/southstar21/extension/<app>/<patch>/`.
 4. Commit with a [conventional commit](https://www.conventionalcommits.org) message. Pushing `feat: ...` or `fix: ...` to `main` publishes a release automatically.
 
+#### Instagram patches and the settings menu
+
+Instagram gets a **southstar21 Patches** button on the profile page (next to Threads and ☰) that opens a menu where each included patch can be switched on/off and configured.
+
+To make a new Instagram patch show up there:
+
+1. In its extension class, add `public static boolean isIncluded() { return false; }` and a `public static final PatchSettings SETTINGS = new PatchSettings("<key>", "<Title>", "<description>", <Class>::isIncluded, ...settings)`, using `BooleanSetting` / `IntSetting` from `app.southstar21.extension.instagram.settings`. Read values with `.get()`; mark settings `requiresRestart` if they're only read at startup.
+2. Add `<Class>.SETTINGS` to the list in `settings/Settings.java`.
+3. If the patch needs the main activity, start it from `InstagramHooks.onMainActivityWindowFocusChanged` behind `if (<Class>.SETTINGS.isActive())`.
+4. In the Kotlin patch, call `markPatchIncluded("L<extension class>;")` in `execute`. Patch options can feed setting defaults by having the patch overwrite a static method the setting's default calls (see `LiquidGlassNavBarPatch`).
+
 ## Building
 
 ```

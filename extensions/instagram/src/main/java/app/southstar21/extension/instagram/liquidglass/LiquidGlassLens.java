@@ -163,7 +163,7 @@ final class LiquidGlassLens extends View {
         x.target = clampX(localX);
         View target = tabAt(localX);
         // A light tick each time the droplet crosses into another tab.
-        if (dragTarget != null && target != dragTarget) {
+        if (dragTarget != null && target != dragTarget && LiquidGlassNavBarPatch.HAPTICS.get()) {
             performHapticFeedback(Build.VERSION.SDK_INT >= 34
                     ? HapticFeedbackConstants.SEGMENT_FREQUENT_TICK
                     : HapticFeedbackConstants.CLOCK_TICK);
@@ -178,9 +178,11 @@ final class LiquidGlassLens extends View {
         release();
         if (target != null) {
             x.target = centerOf(target);
-            performHapticFeedback(Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
-                    ? HapticFeedbackConstants.CONFIRM
-                    : HapticFeedbackConstants.VIRTUAL_KEY);
+            if (LiquidGlassNavBarPatch.HAPTICS.get()) {
+                performHapticFeedback(Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
+                        ? HapticFeedbackConstants.CONFIRM
+                        : HapticFeedbackConstants.VIRTUAL_KEY);
+            }
             target.performClick();
         }
     }
@@ -202,7 +204,7 @@ final class LiquidGlassLens extends View {
      * Like iOS Instagram, scrolling down shrinks the bar and scrolling back up restores it.
      */
     void onContentScroll(float dy) {
-        float target = dy < 0 ? 1f : 0f;
+        float target = dy < 0 && LiquidGlassNavBarPatch.SHRINK_ON_SCROLL.get() ? 1f : 0f;
         if (minimize.target == target) return;
         minimize.target = target;
         startAnimating();
