@@ -1,3 +1,9 @@
+## [1.2.4](https://github.com/southstar21dev/southstar21-patches/compare/v1.2.3...v1.2.4) (2026-10-30)
+
+### 🐛 Bug Fixes
+
+* Smooth Reels edges while scrolling ([9da6c4a](https://github.com/southstar21dev/southstar21-patches/commit/9da6c4ac93b343e9b35352e4516da3a3d3f56e44))
+
 ## [1.2.3](https://github.com/southstar21dev/southstar21-patches/compare/v1.2.2...v1.2.3) (2026-10-30)
 
 ### 🐛 Bug Fixes
