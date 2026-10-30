@@ -1,3 +1,9 @@
+## [1.2.1](https://github.com/southstar21dev/southstar21-patches/compare/v1.2.0...v1.2.1) (2026-10-30)
+
+### 🐛 Bug Fixes
+
+* Full screen Liquid Glass like iOS ([8d8accf](https://github.com/southstar21dev/southstar21-patches/commit/8d8accff739b52448dd1324f8973b141faebbed7))
+
 ## [1.2.0](https://github.com/southstar21dev/southstar21-patches/compare/v1.1.1...v1.2.0) (2026-10-30)
 
 ### ✨ New Features
