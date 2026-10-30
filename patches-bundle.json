@@ -1,7 +1,7 @@
 {
-  "created_at": "2026-10-29T23:36:58",
-  "description": "## [1.0.2](https://github.com/southstar21dev/instagram-liquid-glass/compare/v1.0.1...v1.0.2) (2026-10-29)\n\n### 🐛 Bug Fixes\n\n* Keep the selection lens inside the tab bar ([5deb458](https://github.com/southstar21dev/instagram-liquid-glass/commit/5deb45897515f6e2bfa6152af4e48b4bfd794224))",
-  "download_url": "https://github.com/southstar21dev/instagram-liquid-glass/releases/download/v1.0.2/patches-1.0.2.mpp",
+  "created_at": "2026-10-30T00:09:05",
+  "description": "## [1.1.0](https://github.com/southstar21dev/instagram-liquid-glass/compare/v1.0.2...v1.1.0) (2026-10-30)\n\n### ✨ New Features\n\n* Match iOS Instagram's Liquid Glass design ([7613794](https://github.com/southstar21dev/instagram-liquid-glass/commit/76137940c1911e7a81890f3b8fddaaab501362fc))",
+  "download_url": "https://github.com/southstar21dev/instagram-liquid-glass/releases/download/v1.1.0/patches-1.1.0.mpp",
   "signature_download_url": "",
-  "version": "1.0.2"
+  "version": "1.1.0"
 }

@@ -1,3 +1,9 @@
+## [1.1.0](https://github.com/southstar21dev/instagram-liquid-glass/compare/v1.0.2...v1.1.0) (2026-10-30)
+
+### ✨ New Features
+
+* Match iOS Instagram's Liquid Glass design ([7613794](https://github.com/southstar21dev/instagram-liquid-glass/commit/76137940c1911e7a81890f3b8fddaaab501362fc))
+
 ## [1.0.2](https://github.com/southstar21dev/instagram-liquid-glass/compare/v1.0.1...v1.0.2) (2026-10-29)
 
 ### 🐛 Bug Fixes

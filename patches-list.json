@@ -1,6 +1,6 @@
 {
   "NOTE": "Do NOT manually edit this file. This file is automatically updated when semantic release (release.yml) runs. Manually editing this file can break your releases and break third party tools that use this file.",
-  "version": "1.0.2",
+  "version": "1.1.0",
   "patches": [
     {
       "name": "Liquid Glass navigation bar",
@@ -41,11 +41,11 @@
           "description": "Blur applied to content behind the bar, in dp.",
           "required": true,
           "type": "kotlin.Int",
-          "default": 6,
+          "default": 12,
           "values": {
-            "Clear": 3,
-            "Default": 6,
-            "Frosted": 14
+            "Clear": 6,
+            "Default": 12,
+            "Frosted": 20
           }
         },
         {
