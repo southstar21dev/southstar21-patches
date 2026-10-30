@@ -19,7 +19,9 @@ import java.util.WeakHashMap;
  * relayout its Litho items, each item's media is scaled up around a pivot that pushes it out
  * to both screen edges (cropping the sides a little, like iOS does on tall screens). Every item
  * is clipped to its own slot, extended only past the viewer's outer edges, so a neighbouring
- * reel never draws over the one on screen. Letterboxed reels (landscape, 4:5) are left alone:
+ * reel never draws over the one on screen. Only the media gets that extension: the caption,
+ * buttons and other overlays stay inside the viewer, or a reel sliding away would show them
+ * under the status bar. Letterboxed reels (landscape, 4:5) are left alone:
  * zooming them would only crop their sides. The header's dark legibility gradient is stretched
  * up behind the status bar too, so it doesn't end in a hard line there.
  */
@@ -94,6 +96,7 @@ final class ReelsFullBleed {
                 item.setClipBounds(new Rect(0, clipTop, item.getWidth(), clipBottom));
             }
             touched.put(item, Boolean.TRUE);
+            clipOverlaysToViewer(media, item, viewerTop, viewerBottom);
         }
         unclipToScreen(items, screenHeight);
         stretchHeaderBackground();
@@ -113,6 +116,28 @@ final class ReelsFullBleed {
         int l = header.getPaddingLeft(), t = header.getPaddingTop(), r = header.getPaddingRight(), b = header.getPaddingBottom();
         header.setBackground(stretchedHeaderBackground);
         header.setPadding(l, t, r, b);
+    }
+
+    /** Clips everything in the item except the media (and its ancestors) to the viewer. */
+    private void clipOverlaysToViewer(View media, View item, int viewerTop, int viewerBottom) {
+        for (View child = media; child != item && child.getParent() instanceof ViewGroup; ) {
+            ViewGroup parent = (ViewGroup) child.getParent();
+            for (int i = 0; i < parent.getChildCount(); i++) {
+                View overlay = parent.getChildAt(i);
+                if (overlay == child || overlay.getVisibility() != View.VISIBLE) continue;
+                overlay.getLocationInWindow(location);
+                int top = Math.max(0, viewerTop - location[1]);
+                int bottom = Math.min(overlay.getHeight(), viewerBottom - location[1]);
+                Rect clip = overlay.getClipBounds();
+                if (top <= 0 && bottom >= overlay.getHeight()) {
+                    if (clip != null) overlay.setClipBounds(null);
+                } else if (clip == null || clip.top != top || clip.bottom != bottom || clip.right != overlay.getWidth()) {
+                    overlay.setClipBounds(new Rect(0, top, overlay.getWidth(), Math.max(top, bottom)));
+                }
+                touched.put(overlay, Boolean.TRUE);
+            }
+            child = parent;
+        }
     }
 
     /**
