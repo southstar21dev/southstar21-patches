@@ -1,7 +1,7 @@
 {
-  "created_at": "2026-10-30T00:20:21",
-  "description": "## [1.1.1](https://github.com/southstar21dev/southstar21-patches/compare/v1.1.0...v1.1.1) (2026-10-30)",
-  "download_url": "https://github.com/southstar21dev/southstar21-patches/releases/download/v1.1.1/patches-1.1.1.mpp",
+  "created_at": "2026-10-30T11:02:34",
+  "description": "## [1.2.0](https://github.com/southstar21dev/southstar21-patches/compare/v1.1.1...v1.2.0) (2026-10-30)\n\n### ✨ New Features\n\n* In-app settings menu for Instagram patches ([1afd850](https://github.com/southstar21dev/southstar21-patches/commit/1afd850c1925a8b90183c1b76f60aef0fae5991c))",
+  "download_url": "https://github.com/southstar21dev/southstar21-patches/releases/download/v1.2.0/patches-1.2.0.mpp",
   "signature_download_url": "",
-  "version": "1.1.1"
+  "version": "1.2.0"
 }
