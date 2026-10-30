@@ -1,7 +1,7 @@
 {
-  "created_at": "2026-10-30T12:45:00",
-  "description": "## [1.2.1](https://github.com/southstar21dev/southstar21-patches/compare/v1.2.0...v1.2.1) (2026-10-30)\n\n### 🐛 Bug Fixes\n\n* Full screen Liquid Glass like iOS ([8d8accf](https://github.com/southstar21dev/southstar21-patches/commit/8d8accff739b52448dd1324f8973b141faebbed7))",
-  "download_url": "https://github.com/southstar21dev/southstar21-patches/releases/download/v1.2.1/patches-1.2.1.mpp",
+  "created_at": "2026-10-30T13:07:25",
+  "description": "## [1.2.2](https://github.com/southstar21dev/southstar21-patches/compare/v1.2.1...v1.2.2) (2026-10-30)\n\n### 🐛 Bug Fixes\n\n* Full screen Reels on phones that play video through a SurfaceView ([5014da5](https://github.com/southstar21dev/southstar21-patches/commit/5014da5ced04bb07cf0d38dc7df0c05d551c718b))",
+  "download_url": "https://github.com/southstar21dev/southstar21-patches/releases/download/v1.2.2/patches-1.2.2.mpp",
   "signature_download_url": "",
-  "version": "1.2.1"
+  "version": "1.2.2"
 }

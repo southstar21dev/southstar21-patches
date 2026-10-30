@@ -1,3 +1,9 @@
+## [1.2.2](https://github.com/southstar21dev/southstar21-patches/compare/v1.2.1...v1.2.2) (2026-10-30)
+
+### 🐛 Bug Fixes
+
+* Full screen Reels on phones that play video through a SurfaceView ([5014da5](https://github.com/southstar21dev/southstar21-patches/commit/5014da5ced04bb07cf0d38dc7df0c05d551c718b))
+
 ## [1.2.1](https://github.com/southstar21dev/southstar21-patches/compare/v1.2.0...v1.2.1) (2026-10-30)
 
 ### 🐛 Bug Fixes
