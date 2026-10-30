@@ -9,6 +9,8 @@ import android.view.ViewGroup;
 import android.view.ViewParent;
 
 import java.lang.ref.WeakReference;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.WeakHashMap;
 
 /**
@@ -18,13 +20,14 @@ import java.util.WeakHashMap;
  * Instagram stops the Reels viewer below the status bar and above the tab bar. Rather than
  * relayout its Litho items, each item's media is scaled up around a pivot that pushes it out
  * to both screen edges (cropping the sides a little, like iOS does on tall screens). Every item
- * is clipped to its own slot. The strip under the status bar and the one behind the tab bar
- * each belong to exactly one item, the one drawn on top at that edge of the viewer: Instagram
- * keeps the incoming reel still while the outgoing one slides over it, so both overlap the
- * edges and letting both draw there made the strips flicker between them. At the top only the
- * media gets the extension; the caption and buttons of a reel sliding away stay inside the
- * viewer. At the bottom Instagram's caption gradient is stretched to the screen edge, so it
- * doesn't end in a line above the tab bar. Letterboxed reels (landscape, 4:5) are left alone:
+ * is clipped so neighbouring reels never overlap. Their slots are a viewer height apart but each
+ * picture is a screen high, so the line between two reels can't simply follow the slots: at
+ * rest the current reel must cover the strips under the status bar and behind the tab bar, and
+ * switching those strips to the next reel as soon as a swipe starts made them jump. Instead the
+ * line moves with the swipe, from the screen bottom to the screen top, a little faster than the
+ * content, so the strips change over smoothly. The caption and buttons of a reel sliding away
+ * stay inside the viewer, and Instagram's caption gradient is stretched to the screen bottom so
+ * it doesn't end in a line above the tab bar. Letterboxed reels (landscape, 4:5) are left alone:
  * zooming them would only crop their sides. The header's dark legibility gradient is stretched
  * up behind the status bar too, so it doesn't end in a hard line there.
  */
@@ -72,11 +75,24 @@ final class ReelsFullBleed {
         int extraBottom = screenHeight - viewerBottom;
         if (extraTop + extraBottom == 0) return;
 
-        View topOwner = edgeOwner(items, viewerTop);
-        View bottomOwner = edgeOwner(items, viewerBottom - 1);
-
+        // Visible items from top to bottom, and the line between each pair (window rows).
+        ArrayList<View> visible = new ArrayList<>();
         for (int i = 0; i < items.getChildCount(); i++) {
             View item = items.getChildAt(i);
+            if (item.getVisibility() == View.VISIBLE && item.getHeight() > 0) visible.add(item);
+        }
+        Collections.sort(visible, (a, b) -> Integer.compare(windowTop(a), windowTop(b)));
+        int[] lines = new int[Math.max(0, visible.size() - 1)];
+        for (int i = 0; i < lines.length; i++) {
+            View next = visible.get(i + 1);
+            int nextTop = windowTop(next);
+            // 0 while the next reel waits below the viewer, 1 once it fills the viewer.
+            float progress = Math.max(0f, Math.min(1f, (viewerBottom - nextTop) / (float) next.getHeight()));
+            lines[i] = Math.round(nextTop + extraBottom - (extraTop + extraBottom) * progress);
+        }
+
+        for (int i = 0; i < visible.size(); i++) {
+            View item = visible.get(i);
             View media = mediaId == 0 ? null : item.findViewById(mediaId);
             if (media == null || media.getHeight() == 0) continue;
 
@@ -93,21 +109,19 @@ final class ReelsFullBleed {
             touched.put(media, Boolean.TRUE);
             unclipUpTo(media, item);
 
-            item.getLocationInWindow(location);
-            int top = location[1];
-            // Inside the viewer an item keeps its slot; past its edges only the owner draws.
-            int clipTop = item == topOwner ? -top : Math.max(0, viewerTop - top);
-            int clipBottom = item == bottomOwner ? screenHeight - top
-                    : Math.min(item.getHeight(), viewerBottom - top);
-            clipBottom = Math.max(clipTop, clipBottom);
+            int top = windowTop(item);
+            int from = i > 0 ? lines[i - 1] : 0;
+            int to = i < lines.length ? lines[i] : screenHeight;
+            int clipTop = from - top;
+            int clipBottom = Math.max(clipTop, to - top);
             Rect clip = item.getClipBounds();
             if (clip == null || clip.top != clipTop || clip.bottom != clipBottom || clip.right != item.getWidth()) {
                 item.setClipBounds(new Rect(0, clipTop, item.getWidth(), clipBottom));
             }
             touched.put(item, Boolean.TRUE);
-            boolean stretchGradient = item == bottomOwner && scale != 1f;
+            boolean stretchGradient = to > viewerBottom && scale != 1f;
             stretchBottomGradient(item, stretchGradient ? extraBottom : 0);
-            clipOverlaysToViewer(media, item, viewerTop, stretchGradient ? screenHeight : viewerBottom);
+            clipOverlaysToViewer(media, item, viewerTop, stretchGradient ? to : viewerBottom);
         }
         unclipToScreen(items, screenHeight);
         stretchHeaderBackground();
@@ -129,20 +143,9 @@ final class ReelsFullBleed {
         header.setPadding(l, t, r, b);
     }
 
-    /**
-     * The item drawn on top at window row {@code y}: later children draw over earlier ones
-     * unless one is raised.
-     */
-    private View edgeOwner(ViewGroup items, int y) {
-        View owner = null;
-        for (int i = 0; i < items.getChildCount(); i++) {
-            View item = items.getChildAt(i);
-            if (item.getVisibility() != View.VISIBLE || item.getHeight() == 0) continue;
-            item.getLocationInWindow(location);
-            if (y < location[1] || y >= location[1] + item.getHeight()) continue;
-            if (owner == null || item.getZ() >= owner.getZ()) owner = item;
-        }
-        return owner;
+    private int windowTop(View view) {
+        view.getLocationInWindow(location);
+        return location[1];
     }
 
     /** Stretches Instagram's dark caption gradient down by {@code extra}, from its top edge. */
