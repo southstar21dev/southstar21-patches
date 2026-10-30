@@ -1,3 +1,9 @@
+## [1.2.5](https://github.com/southstar21dev/southstar21-patches/compare/v1.2.4...v1.2.5) (2026-10-30)
+
+### 🐛 Bug Fixes
+
+* Change Reels edge strips smoothly while swiping ([7ddfb88](https://github.com/southstar21dev/southstar21-patches/commit/7ddfb8893735b5182aa304692c7ea0e1a744d168))
+
 ## [1.2.4](https://github.com/southstar21dev/southstar21-patches/compare/v1.2.3...v1.2.4) (2026-10-30)
 
 ### 🐛 Bug Fixes
