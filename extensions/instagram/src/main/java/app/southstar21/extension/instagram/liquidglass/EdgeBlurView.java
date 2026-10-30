@@ -94,6 +94,7 @@ final class EdgeBlurView extends View {
             for (int i = 0; i < index; i++) {
                 View child = parent.getChildAt(i);
                 if (child.getVisibility() != VISIBLE || child.getAlpha() == 0f) continue;
+                if (child instanceof EdgeBlurView) continue;
                 int save = rc.save();
                 rc.translate(child.getLeft() + child.getTranslationX(), child.getTop() + child.getTranslationY());
                 child.draw(rc);
