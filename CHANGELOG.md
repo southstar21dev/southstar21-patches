@@ -1,3 +1,9 @@
+## [1.2.3](https://github.com/southstar21dev/southstar21-patches/compare/v1.2.2...v1.2.3) (2026-10-30)
+
+### 🐛 Bug Fixes
+
+* Keep Reels captions out of the status bar while scrolling ([4e91584](https://github.com/southstar21dev/southstar21-patches/commit/4e91584adcc1a5dba48af6edeea3f6b9225fd5eb))
+
 ## [1.2.2](https://github.com/southstar21dev/southstar21-patches/compare/v1.2.1...v1.2.2) (2026-10-30)
 
 ### 🐛 Bug Fixes
