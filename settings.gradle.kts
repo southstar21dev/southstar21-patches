@@ -1,4 +1,4 @@
-rootProject.name = "instagram-liquid-glass-patches"
+rootProject.name = "southstar21-patches"
 
 pluginManagement {
     repositories {

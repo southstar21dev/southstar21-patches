@@ -1,4 +1,4 @@
-package app.liquidglass.extension.instagram;
+package app.southstar21.extension.instagram.liquidglass;
 
 import android.annotation.SuppressLint;
 import android.content.Context;

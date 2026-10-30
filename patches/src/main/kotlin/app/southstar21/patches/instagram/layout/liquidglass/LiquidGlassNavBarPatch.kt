@@ -1,11 +1,13 @@
-package app.liquidglass.patches.instagram.navbar
+package app.southstar21.patches.instagram.layout.liquidglass
 
-import app.liquidglass.patches.shared.Constants.COMPATIBILITY_INSTAGRAM
 import app.morphe.patcher.extensions.InstructionExtensions.addInstruction
 import app.morphe.patcher.extensions.InstructionExtensions.addInstructions
 import app.morphe.patcher.patch.booleanOption
 import app.morphe.patcher.patch.bytecodePatch
 import app.morphe.patcher.patch.intOption
+import app.southstar21.patches.instagram.misc.extension.sharedExtensionPatch
+import app.southstar21.patches.instagram.shared.Constants.COMPATIBILITY_INSTAGRAM
+import app.southstar21.patches.instagram.shared.MainActivityWindowFocusFingerprint
 
 @Suppress("unused")
 val liquidGlassNavBarPatch = bytecodePatch(
@@ -17,7 +19,7 @@ val liquidGlassNavBarPatch = bytecodePatch(
 ) {
     compatibleWith(COMPATIBILITY_INSTAGRAM)
 
-    extendWith("extensions/extension.mpe")
+    dependsOn(sharedExtensionPatch)
 
     val blurRadius by intOption(
         key = "blurRadius",

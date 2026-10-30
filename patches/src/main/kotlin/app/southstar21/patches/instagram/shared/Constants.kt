@@ -1,4 +1,4 @@
-package app.liquidglass.patches.shared
+package app.southstar21.patches.instagram.shared
 
 import app.morphe.patcher.patch.ApkFileType
 import app.morphe.patcher.patch.AppTarget
@@ -12,8 +12,8 @@ object Constants {
         apkFileType = ApkFileType.APKM,
         appIconColor = 0xE1306C,
         targets = listOf(
-            // The hook targets an unobfuscated lifecycle method, so newer
-            // versions will probably work too, but only this one is verified.
+            // Hooks target unobfuscated lifecycle methods, so newer versions
+            // will probably work too, but only this one is verified.
             AppTarget(
                 version = "439.0.0.37.89"
             ),

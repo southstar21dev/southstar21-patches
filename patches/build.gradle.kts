@@ -1,13 +1,13 @@
-group = "app.liquidglass"
+group = "app.southstar21"
 
 patches {
     about {
-        name = "Liquid Glass Patches"
-        description = "Ports the iOS 26 Liquid Glass tab bar to Instagram for Android"
-        source = "https://github.com/southstar21dev/instagram-liquid-glass"
+        name = "southstar21's Patches"
+        description = "Morphe patches by southstar21"
+        source = "https://github.com/southstar21dev/southstar21-patches"
         author = "southstar21dev"
         contact = "na"
-        website = "https://github.com/southstar21dev/instagram-liquid-glass"
+        website = "https://github.com/southstar21dev/southstar21-patches"
         license = "GPLv3"
     }
 }

@@ -1,4 +1,4 @@
-package app.liquidglass.extension.instagram;
+package app.southstar21.extension.instagram.liquidglass;
 
 import android.content.res.Resources;
 import android.graphics.Color;
