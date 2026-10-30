@@ -20,10 +20,10 @@ import android.widget.FrameLayout;
 final class LiquidGlassController implements ViewTreeObserver.OnPreDrawListener {
     /** Gap between the pill and the bottom of the screen / nav bar. */
     private static final int BOTTOM_GAP_DP = 8;
-    /** Extra height so the pill matches iOS proportions (~62dp vs Instagram's 48dp). */
-    private static final int GROW_DP = 14;
-    /** Gap between the pill and the screen edges. */
-    private static final int SIDE_GAP_DP = 16;
+    /** Extra height so the pill matches iOS Instagram's ~60pt (Instagram Android's bar is 48dp). */
+    private static final int GROW_DP = 12;
+    /** Gap between the pill and the screen edges, ~5% of the width like iOS Instagram. */
+    private static final int SIDE_GAP_DP = 20;
     /** Space between the pill edge and the outermost tab icons. */
     private static final int INNER_PADDING_DP = 6;
     /** On tablets and landscape the pill stops growing at this width. */
@@ -34,7 +34,7 @@ final class LiquidGlassController implements ViewTreeObserver.OnPreDrawListener 
     private final boolean extendContent;
     private final LiquidGlassDrawable glass;
     private final LiquidGlassLens lens;
-    private final EdgeBlurView edge;
+    private final HeaderGlassController headers;
     private final int reelsTabId;
     /** Siblings whose bottom margin reserves room for the tab bar, and which we now manage. */
     private final java.util.WeakHashMap<View, Boolean> managedContent = new java.util.WeakHashMap<>();
@@ -57,7 +57,7 @@ final class LiquidGlassController implements ViewTreeObserver.OnPreDrawListener 
         this.density = bar.getResources().getDisplayMetrics().density;
         this.glass = new LiquidGlassDrawable(bar, density, blurRadiusDp, refractionPercent);
         this.lens = new LiquidGlassLens(bar.getContext(), bar, glass, density);
-        this.edge = new EdgeBlurView(bar.getContext(), density);
+        this.headers = new HeaderGlassController(bar.getRootView(), density);
         this.reelsTabId = bar.getResources().getIdentifier("clips_tab", "id", "com.instagram.android");
         this.sampler = new BackdropSampler(bar, glass::setBackdropLuminance);
     }
@@ -74,8 +74,6 @@ final class LiquidGlassController implements ViewTreeObserver.OnPreDrawListener 
 
         ViewGroup parent = (ViewGroup) bar.getParent();
         parent.addView(lens, parent.indexOfChild(bar) + 1, overlayLayoutParams(lens.extraTop));
-        // Directly below the bar, above the content it blurs.
-        parent.addView(edge, parent.indexOfChild(bar), overlayLayoutParams(edge.extraTop));
 
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
             // Soft system shadow cast by the pill outline. The glass is opaque on 12+, so the
@@ -86,13 +84,13 @@ final class LiquidGlassController implements ViewTreeObserver.OnPreDrawListener 
                     android.graphics.RectF pill = glass.getPill();
                     outline.setRoundRect(Math.round(pill.left), Math.round(pill.top),
                             Math.round(pill.right), Math.round(pill.bottom), pill.height() / 2f);
-                    outline.setAlpha(0.9f);
+                    outline.setAlpha(0.5f);
                 }
             });
-            bar.setElevation(dp(5));
+            bar.setElevation(dp(3));
             // Keep the lens above the now-elevated bar, without a shadow of its own.
             lens.setOutlineProvider(null);
-            lens.setElevation(dp(5) + 0.1f);
+            lens.setElevation(dp(3) + 0.1f);
         }
 
         android.view.Window window = BackdropSampler.windowOf(bar.getContext());
@@ -140,7 +138,8 @@ final class LiquidGlassController implements ViewTreeObserver.OnPreDrawListener 
                 glass.invalidateSelf();
             }
             lens.sync();
-            syncEdge();
+            headers.setDark(glassDarkForHeaders());
+            headers.onPreDraw();
             if (bar.getVisibility() == View.VISIBLE) {
                 glass.getPill().round(sampleRect);
                 sampler.maybeSample(sampleRect, dp(20));
@@ -174,6 +173,12 @@ final class LiquidGlassController implements ViewTreeObserver.OnPreDrawListener 
         Drawable bg = bar.getBackground();
         if (bg == null || bg == glass) return;
         glass.setHostColorHint(bg instanceof ColorDrawable ? ((ColorDrawable) bg).getColor() : null);
+    }
+
+    /** Headers follow the app theme; the Reels color hint only applies to the tab bar. */
+    private boolean glassDarkForHeaders() {
+        int mode = bar.getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK;
+        return mode == Configuration.UI_MODE_NIGHT_YES;
     }
 
     private boolean isDark() {
@@ -218,10 +223,6 @@ final class LiquidGlassController implements ViewTreeObserver.OnPreDrawListener 
             ViewGroup.LayoutParams lensLp = lens.getLayoutParams();
             lensLp.height = appliedHeight + lens.extraTop;
             lens.setLayoutParams(lensLp);
-
-            ViewGroup.LayoutParams edgeLp = edge.getLayoutParams();
-            edgeLp.height = appliedHeight + edge.extraTop;
-            edge.setLayoutParams(edgeLp);
         }
 
         if (appliedForWidth == width) return;
@@ -260,15 +261,6 @@ final class LiquidGlassController implements ViewTreeObserver.OnPreDrawListener 
         return false;
     }
 
-    private void syncEdge() {
-        int visibility = bar.getVisibility() == View.VISIBLE && contentBehindBar() ? View.VISIBLE : View.GONE;
-        if (edge.getVisibility() != visibility) edge.setVisibility(visibility);
-        if (visibility != View.VISIBLE) return;
-        if (edge.getTranslationY() != bar.getTranslationY()) edge.setTranslationY(bar.getTranslationY());
-        if (edge.getAlpha() != bar.getAlpha()) edge.setAlpha(bar.getAlpha());
-        edge.setDark(glass.isDark());
-        edge.invalidate();
-    }
 
     /**
      * Siblings under the bar (the main container, and the ViewPager2 holding the feed) stop
@@ -283,7 +275,7 @@ final class LiquidGlassController implements ViewTreeObserver.OnPreDrawListener 
         int barIndex = parent.indexOfChild(bar);
         for (int i = 0; i < barIndex; i++) {
             View child = parent.getChildAt(i);
-            if (child == shadow || child == edge) continue;
+            if (child == shadow) continue;
             if (!(child.getLayoutParams() instanceof ViewGroup.MarginLayoutParams)) continue;
             ViewGroup.MarginLayoutParams lp = (ViewGroup.MarginLayoutParams) child.getLayoutParams();
             // Only take over the tab bar margin, leave other margins Instagram may set alone.

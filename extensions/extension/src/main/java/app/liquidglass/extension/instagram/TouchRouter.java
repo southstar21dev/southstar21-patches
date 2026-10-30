@@ -25,6 +25,8 @@ final class TouchRouter implements InvocationHandler {
     private boolean tracking;
     private boolean dragging;
     private float downX;
+    // Vertical travel of a gesture on the content, for minimizing the bar on scroll.
+    private float lastRawX, lastRawY, scrollDx, scrollDy;
 
     private TouchRouter(Window.Callback original, LiquidGlassLens lens) {
         this.original = original;
@@ -58,6 +60,9 @@ final class TouchRouter implements InvocationHandler {
             tracking = false;
             dragging = false;
             lens.claimedDown = false;
+            lastRawX = event.getRawX();
+            lastRawY = event.getRawY();
+            scrollDx = scrollDy = 0f;
             // Instagram gets the down as usual; the lens only notes whether it was on the pill.
             boolean handled = original.dispatchTouchEvent(event);
             if (lens.claimedDown) {
@@ -67,7 +72,10 @@ final class TouchRouter implements InvocationHandler {
             }
             return handled;
         }
-        if (!tracking) return original.dispatchTouchEvent(event);
+        if (!tracking) {
+            if (action == MotionEvent.ACTION_MOVE) trackContentScroll(event);
+            return original.dispatchTouchEvent(event);
+        }
 
         float x = localX(event);
         switch (action) {
@@ -99,6 +107,21 @@ final class TouchRouter implements InvocationHandler {
                 return dragging || original.dispatchTouchEvent(event);
             default:
                 return dragging || original.dispatchTouchEvent(event);
+        }
+    }
+
+    private void trackContentScroll(MotionEvent event) {
+        scrollDx += event.getRawX() - lastRawX;
+        scrollDy += event.getRawY() - lastRawY;
+        lastRawX = event.getRawX();
+        lastRawY = event.getRawY();
+        float threshold = 24 * lens.getResources().getDisplayMetrics().density;
+        if (Math.abs(scrollDy) > threshold && Math.abs(scrollDy) > Math.abs(scrollDx) * 1.5f) {
+            // Finger moving up scrolls the content down.
+            lens.onContentScroll(scrollDy);
+            scrollDx = scrollDy = 0f;
+        } else if (Math.abs(scrollDx) > threshold) {
+            scrollDx = scrollDy = 0f;
         }
     }
 

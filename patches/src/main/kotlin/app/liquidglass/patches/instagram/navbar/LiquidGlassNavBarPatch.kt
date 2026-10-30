@@ -21,11 +21,11 @@ val liquidGlassNavBarPatch = bytecodePatch(
 
     val blurRadius by intOption(
         key = "blurRadius",
-        default = 6,
+        default = 12,
         values = mapOf(
-            "Clear" to 3,
-            "Default" to 6,
-            "Frosted" to 14,
+            "Clear" to 6,
+            "Default" to 12,
+            "Frosted" to 20,
         ),
         title = "Blur radius",
         description = "Blur applied to content behind the bar, in dp.",

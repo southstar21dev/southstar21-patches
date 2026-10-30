@@ -20,7 +20,7 @@ public final class LiquidGlassNavBarPatch {
     // The three methods below are overwritten by the patch with the chosen option values.
 
     public static int blurRadiusDp() {
-        return 6;
+        return 12;
     }
 
     public static int refractionPercent() {

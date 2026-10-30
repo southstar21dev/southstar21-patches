@@ -86,7 +86,7 @@ final class LiquidGlassDrawable extends Drawable {
             "  float rim = smoothstep(0.55, 1.0, t);\n" +
             "  float2 light = normalize(float2(-0.45, -0.9));\n" +
             "  float spec = pow(max(dot(n, light), 0.0), 2.0) + 0.45 * pow(max(dot(n, -light), 0.0), 2.0);\n" +
-            "  col.rgb += half3(rim * spec * mix(0.55, 0.32, dark));\n" +
+            "  col.rgb += half3(rim * spec * mix(0.22, 0.18, dark));\n" +
 
             // Faint inner glow along the top for depth.
             "  float top = 1.0 - smoothstep(0.0, size.y * 0.55, coord.y - origin.y);\n" +
@@ -100,7 +100,12 @@ final class LiquidGlassDrawable extends Drawable {
     private final int blurRadiusPx;
     private final float refraction;
 
+    /** Size of the shrunk pill relative to the full one, measured from iOS Instagram. */
+    static final float MINIMIZED_SCALE = 0.83f;
+
     private final RectF pill = new RectF();
+    private final RectF fullPill = new RectF();
+    private float minimize;
     private int insetLeft, insetRight, insetBottom;
     private boolean dark;
     private Integer hostColorHint;
@@ -165,9 +170,10 @@ final class LiquidGlassDrawable extends Drawable {
      * has the same brightness as the icons.
      */
     private float tintTarget() {
-        if (backdropLuminance < 0f) return dark ? 0.30f : 0.16f;
-        if (dark) return 0.30f + 0.40f * smoothstep(0.45f, 0.85f, backdropLuminance);
-        return 0.16f + 0.50f * (1f - smoothstep(0.22f, 0.62f, backdropLuminance));
+        // iOS Instagram's glass is heavily frosted: white ~45% in light mode, smoky in dark.
+        if (backdropLuminance < 0f) return dark ? 0.42f : 0.55f;
+        if (dark) return 0.42f + 0.25f * smoothstep(0.45f, 0.85f, backdropLuminance);
+        return 0.55f + 0.23f * (1f - smoothstep(0.22f, 0.62f, backdropLuminance));
     }
 
     private static float smoothstep(float edge0, float edge1, float x) {
@@ -191,11 +197,35 @@ final class LiquidGlassDrawable extends Drawable {
         return dark;
     }
 
-    /** Pill bounds in the host's coordinates. */
-    RectF getPill() {
+    /** Full size pill bounds in the host's coordinates, ignoring minimization. */
+    RectF getFullPill() {
         Rect b = getBounds();
-        pill.set(b.left + insetLeft, b.top, b.right - insetRight, b.bottom - insetBottom);
+        fullPill.set(b.left + insetLeft, b.top, b.right - insetRight, b.bottom - insetBottom);
+        return fullPill;
+    }
+
+    /** Current pill bounds in the host's coordinates, scaled down around the bottom center while shrunk. */
+    RectF getPill() {
+        RectF full = getFullPill();
+        pill.set(full);
+        if (minimize > 0f) {
+            float s = currentScale();
+            float w = full.width() * s;
+            float h = full.height() * s;
+            pill.set(full.centerX() - w / 2f, full.bottom - h, full.centerX() + w / 2f, full.bottom);
+        }
         return pill;
+    }
+
+    float currentScale() {
+        return 1f - (1f - MINIMIZED_SCALE) * minimize;
+    }
+
+    /** {@code progress} 0 = full bar, 1 = shrunk while scrolling. */
+    void setMinimize(float progress) {
+        if (minimize == progress) return;
+        minimize = progress;
+        invalidateSelf();
     }
 
     @Override
@@ -231,7 +261,8 @@ final class LiquidGlassDrawable extends Drawable {
         if (hostIndex <= 0) return false;
 
         boolean refract = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && refraction > 0f;
-        float strength = refract ? refraction * 0.30f * pill.height() : 0f;
+        // iOS Instagram bends only a thin band at the rim.
+        float strength = refract ? refraction * 0.15f * pill.height() : 0f;
         int pad = (int) Math.ceil(Math.max(strength * 1.1f, blurRadiusPx * 2f)) + 2;
 
         int w = Math.round(pill.width()) + 2 * pad;
@@ -343,7 +374,7 @@ final class LiquidGlassDrawable extends Drawable {
     }
 
     private void drawRim(Canvas canvas, float radius) {
-        int bright = dark ? Color.argb(0x66, 0xFF, 0xFF, 0xFF) : Color.argb(0xCC, 0xFF, 0xFF, 0xFF);
+        int bright = dark ? Color.argb(0x55, 0xFF, 0xFF, 0xFF) : Color.argb(0x99, 0xFF, 0xFF, 0xFF);
         int faint = dark ? Color.argb(0x14, 0xFF, 0xFF, 0xFF) : Color.argb(0x22, 0xFF, 0xFF, 0xFF);
         int mid = Color.argb(0x08, 0xFF, 0xFF, 0xFF);
         rimPaint.setShader(new LinearGradient(

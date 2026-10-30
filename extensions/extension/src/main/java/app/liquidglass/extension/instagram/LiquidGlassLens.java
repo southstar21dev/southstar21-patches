@@ -14,6 +14,7 @@ import android.graphics.RenderNode;
 import android.graphics.RuntimeShader;
 import android.graphics.Shader;
 import android.os.Build;
+import android.view.HapticFeedbackConstants;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewConfiguration;
@@ -23,7 +24,7 @@ import android.view.ViewGroup;
  * The iOS 26 selection "droplet", drawn in a view stacked above the tab bar.
  * <p>
  * At rest it's a soft capsule behind the selected tab. When pressed it swells within the pill
- * as a clear magnifying lens; dragging glides it across the tabs (stretching with speed)
+ * as clear glass; dragging glides it across the tabs (stretching with speed)
  * and releasing snaps it to the nearest tab and opens it. Plain taps, double taps and
  * long presses go to the real tab bar untouched.
  */
@@ -59,7 +60,7 @@ final class LiquidGlassLens extends View {
 
             "  float t = clamp(1.0 + d / bezel, 0.0, 1.0);\n" +
             "  float bend = 1.0 - sqrt(max(1.0 - t * t, 0.0));\n" +
-            // Magnify the middle, push the rim outwards like a thick convex droplet.
+            // Bend the rim outwards like a thick convex droplet (mag scales the middle, 1 = none).
             "  float2 src = center + p / mag + n * bend * strength;\n" +
             "  float2 fringe = n * bend * strength * 0.08;\n" +
 
@@ -69,7 +70,7 @@ final class LiquidGlassLens extends View {
             "  col.b = content.eval(src - fringe).b;\n" +
             "  col.a = 1.0;\n" +
 
-            "  col.rgb = mix(col.rgb, half3(mix(1.0, 0.2, dark)), mix(0.06, 0.10, dark));\n" +
+            "  col.rgb = mix(col.rgb, half3(mix(1.0, 0.85, dark)), mix(0.32, 0.16, dark));\n" +
 
             "  float2 light = normalize(float2(-0.45, -0.9));\n" +
             "  float spec = pow(max(dot(n, light), 0.0), 2.0) + 0.5 * pow(max(dot(n, -light), 0.0), 2.0);\n" +
@@ -92,6 +93,9 @@ final class LiquidGlassLens extends View {
     private final Spring x = new Spring(420f, 0.68f, 0.3f);
     private final Spring width = new Spring(520f, 0.75f, 0.002f);
     private final Spring press = new Spring(560f, 0.62f, 0.002f);
+    /** 0 = full bar, 1 = shrunk while scrolling. */
+    private final Spring minimize = new Spring(260f, 0.86f, 0.002f);
+    private float appliedMinimize = -1f;
     private long lastFrame;
 
     /** Set when this view accepted a touch-down, read by {@link TouchRouter}. */
@@ -157,7 +161,14 @@ final class LiquidGlassLens extends View {
     void dragTo(float localX) {
         dragging = true;
         x.target = clampX(localX);
-        dragTarget = tabAt(localX);
+        View target = tabAt(localX);
+        // A light tick each time the droplet crosses into another tab.
+        if (dragTarget != null && target != dragTarget) {
+            performHapticFeedback(Build.VERSION.SDK_INT >= 34
+                    ? HapticFeedbackConstants.SEGMENT_FREQUENT_TICK
+                    : HapticFeedbackConstants.CLOCK_TICK);
+        }
+        dragTarget = target;
         startAnimating();
     }
 
@@ -167,6 +178,9 @@ final class LiquidGlassLens extends View {
         release();
         if (target != null) {
             x.target = centerOf(target);
+            performHapticFeedback(Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
+                    ? HapticFeedbackConstants.CONFIRM
+                    : HapticFeedbackConstants.VIRTUAL_KEY);
             target.performClick();
         }
     }
@@ -183,6 +197,23 @@ final class LiquidGlassLens extends View {
         return dragging;
     }
 
+    /**
+     * Content was scrolled by a finger moving {@code dy} px (negative = content scrolls down).
+     * Like iOS Instagram, scrolling down shrinks the bar and scrolling back up restores it.
+     */
+    void onContentScroll(float dy) {
+        float target = dy < 0 ? 1f : 0f;
+        if (minimize.target == target) return;
+        minimize.target = target;
+        startAnimating();
+    }
+
+    void expand() {
+        if (minimize.target == 0f) return;
+        minimize.target = 0f;
+        startAnimating();
+    }
+
     private View tabAt(float lensX) {
         float bx = lensX + getLeft() - bar.getLeft();
         View best = null;
@@ -190,7 +221,7 @@ final class LiquidGlassLens extends View {
         for (int i = 0; i < bar.getChildCount(); i++) {
             View child = bar.getChildAt(i);
             if (child.getVisibility() != VISIBLE) continue;
-            float dist = Math.abs(child.getLeft() + child.getWidth() / 2f - bx);
+            float dist = Math.abs(barCenterOf(child) - bx);
             if (dist < bestDist) {
                 bestDist = dist;
                 best = child;
@@ -200,7 +231,13 @@ final class LiquidGlassLens extends View {
     }
 
     private float centerOf(View tab) {
-        return tab.getLeft() + tab.getWidth() / 2f + bar.getLeft() - getLeft();
+        return barCenterOf(tab) + bar.getLeft() - getLeft();
+    }
+
+    /** Horizontal center of a tab in the bar's coordinates, including its shrink transform. */
+    private static float barCenterOf(View tab) {
+        return tab.getLeft() + tab.getPivotX() + (tab.getWidth() / 2f - tab.getPivotX()) * tab.getScaleX()
+                + tab.getTranslationX();
     }
 
     private float clampX(float value) {
@@ -220,6 +257,8 @@ final class LiquidGlassLens extends View {
         if (getAlpha() != bar.getAlpha()) setAlpha(bar.getAlpha());
 
         View selected = selectedTab();
+        if (selected != lastSelected && lastSelected != null) expand();
+        applyMinimize(selected);
         if (selected != lastSelected) {
             if (lastSelected == null || selected == null) {
                 if (selected != null) x.snap(centerOf(selected));
@@ -230,17 +269,41 @@ final class LiquidGlassLens extends View {
             }
             lastSelected = selected;
             startAnimating();
-        } else if (selected != null && !tracking && !isAnimating()) {
+        } else if (selected != null && !tracking && (!isAnimating() || !minimize.isAtRest())) {
             float c = centerOf(selected);
             if (Math.abs(x.value - c) > 0.5f) x.snap(c);
         }
         invalidate();
     }
 
+    /**
+     * Scales the whole bar down around its bottom center while content scrolls, like iOS
+     * Instagram: the pill and all five tabs shrink together and stay tappable.
+     */
+    private void applyMinimize(View selected) {
+        float m = Math.max(0f, Math.min(1f, minimize.value));
+        if (m == appliedMinimize && selected == lastSelected) return;
+        appliedMinimize = m;
+
+        glass.setMinimize(m);
+        bar.invalidateOutline();
+
+        RectF full = glass.getFullPill();
+        float scale = glass.currentScale();
+        for (int i = 0; i < bar.getChildCount(); i++) {
+            View child = bar.getChildAt(i);
+            // Shared pivot so the tabs keep their spacing relative to the shrinking pill.
+            child.setPivotX(full.centerX() - child.getLeft());
+            child.setPivotY(full.bottom - child.getTop());
+            child.setScaleX(scale);
+            child.setScaleY(scale);
+        }
+    }
+
     private View selectedTab() {
         for (int i = 0; i < bar.getChildCount(); i++) {
             View child = bar.getChildAt(i);
-            if (child.getVisibility() == VISIBLE && (child.isSelected() || child.isActivated())) return child;
+            if (child.getVisibility() != GONE && (child.isSelected() || child.isActivated())) return child;
         }
         return null;
     }
@@ -254,7 +317,7 @@ final class LiquidGlassLens extends View {
 
     private float currentRestWidth() {
         View ref = lastSelected != null ? lastSelected : (bar.getChildCount() > 0 ? bar.getChildAt(0) : null);
-        float tab = ref != null ? ref.getWidth() : pill.height();
+        float tab = ref != null ? ref.getWidth() * ref.getScaleX() : pill.height();
         return Math.min(tab + 6 * density, pill.width());
     }
 
@@ -263,7 +326,7 @@ final class LiquidGlassLens extends View {
     // region Animation
 
     private boolean isAnimating() {
-        return !x.isAtRest() || !press.isAtRest() || !width.isAtRest();
+        return !x.isAtRest() || !press.isAtRest() || !width.isAtRest() || !minimize.isAtRest();
     }
 
     private void startAnimating() {
@@ -277,6 +340,7 @@ final class LiquidGlassLens extends View {
         lastFrame = now;
         x.step(dt);
         press.step(dt);
+        minimize.step(dt);
         // Stretch along the direction of travel, like a droplet being dragged.
         width.target = 1f + Math.min(Math.abs(x.velocity) / (pill.width() * 2.2f), 0.45f);
         width.step(dt);
@@ -295,13 +359,14 @@ final class LiquidGlassLens extends View {
         step();
 
         float p = Math.max(0f, press.value);
-        // Like iOS, the droplet swells when pressed but never leaves the pill.
-        float inset = 3 * density;
+        // iOS Instagram's indicator stays capsule sized: it only swells a touch while moving.
+        float scale = glass.currentScale();
+        float inset = 3 * density * scale;
         float maxW = pill.width() - 2 * inset;
         float maxH = pill.height() - 2 * inset;
         float restW = currentRestWidth();
-        float restH = pill.height() - 8 * density;
-        float pressedW = restW * 1.12f;
+        float restH = pill.height() - 2 * inset;
+        float pressedW = restW * 1.05f;
 
         float stretch = width.value;
         float grow = Math.min(p, 1f);
@@ -314,10 +379,10 @@ final class LiquidGlassLens extends View {
 
         boolean dark = glass.isDark();
 
-        // Resting capsule fades out as the lens pops in.
+        // Grey resting capsule (~10% black, ~16% white on dark), fading into clear glass while moving.
         float restAlpha = 1f - Math.min(1f, p * 1.6f);
         if (restAlpha > 0f) {
-            int a = Math.round((dark ? 0x30 : 0x16) * restAlpha);
+            int a = Math.round((dark ? 0x2A : 0x1A) * restAlpha);
             fill.setColor(dark ? Color.argb(a, 0xFF, 0xFF, 0xFF) : Color.argb(a, 0, 0, 0));
             canvas.drawRoundRect(lens, r, r, fill);
         }
@@ -340,14 +405,14 @@ final class LiquidGlassLens extends View {
         }
     }
 
-    /** Records everything up to and including the tab bar under the lens, then draws it magnified. */
+    /** Records everything up to and including the tab bar under the lens, then draws it as glass. */
     private void drawLens(Canvas canvas, float r, float p, boolean dark) {
         if (!(bar.getParent() instanceof ViewGroup)) return;
         ViewGroup parent = (ViewGroup) bar.getParent();
         int barIndex = parent.indexOfChild(bar);
         if (barIndex < 0) return;
 
-        float strength = 10f * density * p;
+        float strength = 6f * density * p;
         int pad = Math.round(strength + 4 * density);
         int w = Math.round(lens.width()) + 2 * pad;
         int h = Math.round(lens.height()) + 2 * pad;
@@ -382,7 +447,8 @@ final class LiquidGlassLens extends View {
         shader.setFloatUniform("center", w / 2f, h / 2f);
         shader.setFloatUniform("halfSize", lens.width() / 2f, lens.height() / 2f);
         shader.setFloatUniform("radius", r);
-        shader.setFloatUniform("mag", 1f + 0.22f * p);
+        // No magnification: iOS Instagram's indicator doesn't zoom like the App Store's.
+        shader.setFloatUniform("mag", 1f);
         shader.setFloatUniform("bezel", Math.min(r, 16f * density));
         shader.setFloatUniform("strength", strength);
         shader.setFloatUniform("dark", dark ? 1f : 0f);

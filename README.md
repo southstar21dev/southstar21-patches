@@ -1,10 +1,13 @@
 # Instagram Liquid Glass
 
-A [Morphe](https://morphe.software) patch that brings the iOS 26 Liquid Glass tab bar to Instagram for Android.
+A [Morphe](https://morphe.software) patch that brings Instagram's iOS 26 Liquid Glass design to Instagram for Android, matched against screen recordings of the iOS app.
 
-- **Floating glass pill** with live background blur, edge refraction, chromatic fringe and a specular rim (Android 13+).
-- **Glass selection droplet**: press a tab and the lens swells inside the bar and magnifies the icon; drag to glide it across tabs (it stretches with speed) and release to open the tab underneath.
-- **Adaptive tint**: the glass frosts more over content that would make the icons hard to read, and turns dark on Reels and in dark mode.
+- **Floating glass tab bar**: a frosted pill with live background blur, a subtle refracting rim and a grey capsule behind the selected tab.
+- **Shrinks while scrolling**: scrolling down scales the whole bar down (all tabs stay visible and tappable), scrolling up restores it.
+- **Gliding selection**: drag along the bar to slide the selection between tabs as clear glass, with a haptic tick per tab; release to open the tab underneath.
+- **Glass header**: the feed and Explore headers let content scroll under them; the + and heart buttons turn into glass circles once there's content behind them.
+- **Glass search field** on Explore.
+- **Adaptive tint**: the glass frosts more when the content behind it would make the icons hard to read, and turns dark on Reels and in dark mode.
 - Taps, double taps and long presses on the tabs still go to Instagram untouched.
 
 Android 12 gets blur without refraction, older versions get a translucent tinted pill.
@@ -26,7 +29,7 @@ Then patch the Instagram **APKM** bundle from APKMirror (version listed below). 
 
 | Option | Default | |
 |---|---|---|
-| Blur radius | 6 dp | How frosted the glass is (0 to 40). |
+| Blur radius | 12 dp | How frosted the glass is (0 to 40). |
 | Refraction strength | 60 | How strongly the edge bends what's behind it (0 to 100). |
 | Extend content behind bar | on | Lets feeds scroll under the bar so there's something to see through the glass. |
 
