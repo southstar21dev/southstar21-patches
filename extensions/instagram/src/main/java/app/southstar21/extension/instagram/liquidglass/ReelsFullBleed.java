@@ -18,10 +18,13 @@ import java.util.WeakHashMap;
  * Instagram stops the Reels viewer below the status bar and above the tab bar. Rather than
  * relayout its Litho items, each item's media is scaled up around a pivot that pushes it out
  * to both screen edges (cropping the sides a little, like iOS does on tall screens). Every item
- * is clipped to its own slot, extended only past the viewer's outer edges, so a neighbouring
- * reel never draws over the one on screen. Only the media gets that extension: the caption,
- * buttons and other overlays stay inside the viewer, or a reel sliding away would show them
- * under the status bar. Letterboxed reels (landscape, 4:5) are left alone:
+ * is clipped to its own slot. The strip under the status bar and the one behind the tab bar
+ * each belong to exactly one item, the one drawn on top at that edge of the viewer: Instagram
+ * keeps the incoming reel still while the outgoing one slides over it, so both overlap the
+ * edges and letting both draw there made the strips flicker between them. At the top only the
+ * media gets the extension; the caption and buttons of a reel sliding away stay inside the
+ * viewer. At the bottom Instagram's caption gradient is stretched to the screen edge, so it
+ * doesn't end in a line above the tab bar. Letterboxed reels (landscape, 4:5) are left alone:
  * zooming them would only crop their sides. The header's dark legibility gradient is stretched
  * up behind the status bar too, so it doesn't end in a hard line there.
  */
@@ -32,6 +35,7 @@ final class ReelsFullBleed {
     private final int pagerId;
     private final int mediaId;
     private final int actionBarId;
+    private final int bottomGradientId;
     private final int[] location = new int[2];
     /** Items and media we changed, so they can be put back when Reels is left. */
     private final WeakHashMap<View, Boolean> touched = new WeakHashMap<>();
@@ -47,6 +51,7 @@ final class ReelsFullBleed {
         pagerId = container.getResources().getIdentifier("clips_viewer_view_pager", "id", "com.instagram.android");
         mediaId = container.getResources().getIdentifier("clips_media_component", "id", "com.instagram.android");
         actionBarId = container.getResources().getIdentifier("clips_viewer_action_bar", "id", "com.instagram.android");
+        bottomGradientId = container.getResources().getIdentifier("clips_bottom_legibility_gradient_component", "id", "com.instagram.android");
     }
 
     void update(boolean active) {
@@ -66,6 +71,9 @@ final class ReelsFullBleed {
         int extraTop = viewerTop;
         int extraBottom = screenHeight - viewerBottom;
         if (extraTop + extraBottom == 0) return;
+
+        View topOwner = edgeOwner(items, viewerTop);
+        View bottomOwner = edgeOwner(items, viewerBottom - 1);
 
         for (int i = 0; i < items.getChildCount(); i++) {
             View item = items.getChildAt(i);
@@ -87,16 +95,19 @@ final class ReelsFullBleed {
 
             item.getLocationInWindow(location);
             int top = location[1];
-            boolean pastTop = top <= viewerTop + 1;
-            boolean pastBottom = top + item.getHeight() >= viewerBottom - 1;
+            // Inside the viewer an item keeps its slot; past its edges only the owner draws.
+            int clipTop = item == topOwner ? -top : Math.max(0, viewerTop - top);
+            int clipBottom = item == bottomOwner ? screenHeight - top
+                    : Math.min(item.getHeight(), viewerBottom - top);
+            clipBottom = Math.max(clipTop, clipBottom);
             Rect clip = item.getClipBounds();
-            int clipTop = pastTop ? -top : 0;
-            int clipBottom = pastBottom ? screenHeight - top : item.getHeight();
             if (clip == null || clip.top != clipTop || clip.bottom != clipBottom || clip.right != item.getWidth()) {
                 item.setClipBounds(new Rect(0, clipTop, item.getWidth(), clipBottom));
             }
             touched.put(item, Boolean.TRUE);
-            clipOverlaysToViewer(media, item, viewerTop, viewerBottom);
+            boolean stretchGradient = item == bottomOwner && scale != 1f;
+            stretchBottomGradient(item, stretchGradient ? extraBottom : 0);
+            clipOverlaysToViewer(media, item, viewerTop, stretchGradient ? screenHeight : viewerBottom);
         }
         unclipToScreen(items, screenHeight);
         stretchHeaderBackground();
@@ -116,6 +127,35 @@ final class ReelsFullBleed {
         int l = header.getPaddingLeft(), t = header.getPaddingTop(), r = header.getPaddingRight(), b = header.getPaddingBottom();
         header.setBackground(stretchedHeaderBackground);
         header.setPadding(l, t, r, b);
+    }
+
+    /**
+     * The item drawn on top at window row {@code y}: later children draw over earlier ones
+     * unless one is raised.
+     */
+    private View edgeOwner(ViewGroup items, int y) {
+        View owner = null;
+        for (int i = 0; i < items.getChildCount(); i++) {
+            View item = items.getChildAt(i);
+            if (item.getVisibility() != View.VISIBLE || item.getHeight() == 0) continue;
+            item.getLocationInWindow(location);
+            if (y < location[1] || y >= location[1] + item.getHeight()) continue;
+            if (owner == null || item.getZ() >= owner.getZ()) owner = item;
+        }
+        return owner;
+    }
+
+    /** Stretches Instagram's dark caption gradient down by {@code extra}, from its top edge. */
+    private void stretchBottomGradient(View item, int extra) {
+        View gradient = bottomGradientId == 0 ? null : item.findViewById(bottomGradientId);
+        if (gradient == null || gradient.getHeight() == 0) return;
+        float scale = (gradient.getHeight() + extra) / (float) gradient.getHeight();
+        if (gradient.getScaleY() != scale || gradient.getPivotY() != 0f) {
+            gradient.setPivotY(0f);
+            gradient.setScaleY(scale);
+        }
+        touched.put(gradient, Boolean.TRUE);
+        if (extra > 0) unclipUpTo(gradient, item);
     }
 
     /** Clips everything in the item except the media (and its ancestors) to the viewer. */
