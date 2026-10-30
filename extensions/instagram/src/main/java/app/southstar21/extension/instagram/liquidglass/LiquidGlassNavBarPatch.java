@@ -64,6 +64,15 @@ public final class LiquidGlassNavBarPatch {
         return true;
     }
 
+    /**
+     * Called from Instagram's video layout, which plays Reels through a SurfaceView on some
+     * phones. A SurfaceView's picture can't be zoomed full screen or blurred behind the tab bar,
+     * so while Liquid Glass is on, Reels always use a TextureView.
+     */
+    public static boolean enforceTextureView(boolean enforce) {
+        return enforce || SETTINGS.isActive();
+    }
+
     /** Called by {@link InstagramHooks} when this patch is included and switched on. */
     public static void onMainActivityReady(Activity activity) {
         try {
