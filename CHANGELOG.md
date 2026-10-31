@@ -1,3 +1,9 @@
+## [1.3.2](https://github.com/southstar21dev/southstar21-patches/compare/v1.3.1...v1.3.2) (2026-10-31)
+
+### 🐛 Bug Fixes
+
+* Remove top bar glass and keep only the bottom navigation bar ([2991b1a](https://github.com/southstar21dev/southstar21-patches/commit/2991b1a525d1d54ee583b8c34ed9f725d889a177))
+
 ## [1.3.1](https://github.com/southstar21dev/southstar21-patches/compare/v1.3.0...v1.3.1) (2026-10-31)
 
 ### 🐛 Bug Fixes
