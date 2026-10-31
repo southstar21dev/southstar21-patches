@@ -1,3 +1,9 @@
+## [1.3.1](https://github.com/southstar21dev/southstar21-patches/compare/v1.3.0...v1.3.1) (2026-10-31)
+
+### 🐛 Bug Fixes
+
+* Remove full screen Reels and keep Instagram's own Reels layout ([c3a339f](https://github.com/southstar21dev/southstar21-patches/commit/c3a339f6ffcb4d3508e0ead7ed06d54f27990a0e))
+
 ## [1.3.0](https://github.com/southstar21dev/southstar21-patches/compare/v1.2.6...v1.3.0) (2026-10-31)
 
 ### 🐛 Bug Fixes
