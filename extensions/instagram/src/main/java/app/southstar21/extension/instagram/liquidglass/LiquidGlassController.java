@@ -18,7 +18,7 @@ import android.widget.FrameLayout;
  * whenever Instagram has overwritten them.
  * <p>
  * Like iOS, content runs under the system navigation bar and a blur fades in behind the pill
- * towards the bottom edge. On Reels the video fills the whole screen ({@link ReelsFullBleed}).
+ * towards the bottom edge. Reels keeps its own layout and stops above the pill.
  */
 final class LiquidGlassController implements ViewTreeObserver.OnPreDrawListener {
     /** Gap between the pill and the bottom of the screen / nav bar. */
@@ -46,7 +46,6 @@ final class LiquidGlassController implements ViewTreeObserver.OnPreDrawListener 
     private final float density;
     /** Progressive blur behind the pill. Null if it can't be added. */
     private EdgeBlurView bottomBlur;
-    private final ReelsFullBleed reels;
     private final int[] location = new int[2];
     /** How far the bar's container stops short of the screen bottom for the navigation bar. */
     private int bottomInset;
@@ -71,7 +70,6 @@ final class LiquidGlassController implements ViewTreeObserver.OnPreDrawListener 
                 : null;
         this.reelsTabId = bar.getResources().getIdentifier("clips_tab", "id", "com.instagram.android");
         this.sampler = new BackdropSampler(bar, glass::setBackdropLuminance);
-        this.reels = new ReelsFullBleed((ViewGroup) bar.getParent());
     }
 
     void install() {
@@ -184,7 +182,6 @@ final class LiquidGlassController implements ViewTreeObserver.OnPreDrawListener 
         enforceGeometry();
         enforceContentMargins();
         enforceEdgeBlurs();
-        reels.update(bar.getVisibility() == View.VISIBLE && isReelsSelected());
     }
 
     /**
