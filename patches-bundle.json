@@ -1,7 +1,7 @@
 {
-  "created_at": "2026-10-31T21:57:19",
-  "description": "## [1.2.6](https://github.com/southstar21dev/southstar21-patches/compare/v1.2.5...v1.2.6) (2026-10-31)\n\n### 🐛 Bug Fixes\n\n* Support Instagram 453.0.0.57.79 ([a17882e](https://github.com/southstar21dev/southstar21-patches/commit/a17882e7aea327516c77a6e34322ff0b205f82c3))",
-  "download_url": "https://github.com/southstar21dev/southstar21-patches/releases/download/v1.2.6/patches-1.2.6.mpp",
+  "created_at": "2026-10-31T22:49:42",
+  "description": "## [1.3.0](https://github.com/southstar21dev/southstar21-patches/compare/v1.2.6...v1.3.0) (2026-10-31)\n\n### 🐛 Bug Fixes\n\n* Fade Reels header controls back in after ads ([39e586f](https://github.com/southstar21dev/southstar21-patches/commit/39e586f5e2f4c16aebf4d570229bdb972051b3e4))\n\n### ✨ New Features\n\n* Bypass signature check and remove build expired popup for Instagram ([ea22957](https://github.com/southstar21dev/southstar21-patches/commit/ea2295729fcc7b44ff9a08e6b78ce6e421db8d6a))",
+  "download_url": "https://github.com/southstar21dev/southstar21-patches/releases/download/v1.3.0/patches-1.3.0.mpp",
   "signature_download_url": "",
-  "version": "1.2.6"
+  "version": "1.3.0"
 }

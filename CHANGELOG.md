@@ -1,3 +1,13 @@
+## [1.3.0](https://github.com/southstar21dev/southstar21-patches/compare/v1.2.6...v1.3.0) (2026-10-31)
+
+### 🐛 Bug Fixes
+
+* Fade Reels header controls back in after ads ([39e586f](https://github.com/southstar21dev/southstar21-patches/commit/39e586f5e2f4c16aebf4d570229bdb972051b3e4))
+
+### ✨ New Features
+
+* Bypass signature check and remove build expired popup for Instagram ([ea22957](https://github.com/southstar21dev/southstar21-patches/commit/ea2295729fcc7b44ff9a08e6b78ce6e421db8d6a))
+
 ## [1.2.6](https://github.com/southstar21dev/southstar21-patches/compare/v1.2.5...v1.2.6) (2026-10-31)
 
 ### 🐛 Bug Fixes
