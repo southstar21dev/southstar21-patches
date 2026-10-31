@@ -49,8 +49,6 @@ Brings Instagram's iOS 26 Liquid Glass design to Android, matched against screen
 - **Floating glass tab bar**: a frosted pill with live background blur, a subtle refracting rim and a grey capsule behind the selected tab.
 - **Shrinks while scrolling**: scrolling down scales the whole bar down (all tabs stay visible and tappable), scrolling up restores it.
 - **Gliding selection**: drag along the bar to slide the selection between tabs as clear glass, with a haptic tick per tab; release to open the tab underneath.
-- **Glass header**: the feed and Explore headers let content scroll under them; the + and heart buttons turn into glass circles once there's content behind them.
-- **Glass search field** on Explore.
 - **Adaptive tint**: the glass frosts more when the content behind it would make the icons hard to read, and turns dark on Reels and in dark mode.
 - Taps, double taps and long presses on the tabs still go to Instagram untouched.
 
