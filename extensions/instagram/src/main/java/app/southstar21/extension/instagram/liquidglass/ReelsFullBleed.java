@@ -7,6 +7,7 @@ import android.os.SystemClock;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewParent;
+import android.view.animation.DecelerateInterpolator;
 
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
@@ -30,9 +31,13 @@ import java.util.WeakHashMap;
  * it doesn't end in a line above the tab bar. Letterboxed reels (landscape, 4:5) are left alone:
  * zooming them would only crop their sides. The header's dark legibility gradient is stretched
  * up behind the status bar too, so it doesn't end in a hard line there.
+ * <p>
+ * Instagram hides the header's controls on ads and shows them again the instant the next reel
+ * has settled, so they are faded in rather than popping over a video that has stopped moving.
  */
 final class ReelsFullBleed {
     private static final long SCAN_INTERVAL_MS = 250;
+    private static final long HEADER_FADE_MS = 220;
 
     private final ViewGroup container;
     private final int pagerId;
@@ -44,6 +49,8 @@ final class ReelsFullBleed {
     private final WeakHashMap<View, Boolean> touched = new WeakHashMap<>();
     private WeakReference<ViewGroup> pager;
     private WeakReference<View> actionBar;
+    /** The header's controls, and whether each was visible on the last frame. */
+    private final WeakHashMap<View, Boolean> headerControls = new WeakHashMap<>();
     /** Our stretched copy of the header background, and how far up it reaches. */
     private Drawable stretchedHeaderBackground;
     private int stretchedBy;
@@ -125,6 +132,33 @@ final class ReelsFullBleed {
         }
         unclipToScreen(items, screenHeight);
         stretchHeaderBackground();
+        fadeInHeaderControls();
+    }
+
+    /** The controls sit two levels under the header, in its left, title and right sections. */
+    private void fadeInHeaderControls() {
+        View header = actionBar != null ? actionBar.get() : null;
+        if (!(header instanceof ViewGroup)) return;
+        ViewGroup sections = (ViewGroup) header;
+        for (int i = 0; i < sections.getChildCount(); i++) {
+            if (!(sections.getChildAt(i) instanceof ViewGroup)) continue;
+            ViewGroup section = (ViewGroup) sections.getChildAt(i);
+            for (int j = 0; j < section.getChildCount(); j++) {
+                View control = section.getChildAt(j);
+                boolean shown = control.getVisibility() == View.VISIBLE;
+                Boolean wasShown = headerControls.put(control, shown);
+                if (wasShown == null || wasShown == shown) continue;
+                control.animate().cancel();
+                if (shown) {
+                    // Runs before the frame is drawn, so the control never shows at full alpha.
+                    control.setAlpha(0f);
+                    control.animate().alpha(1f).setDuration(HEADER_FADE_MS)
+                            .setInterpolator(new DecelerateInterpolator());
+                } else {
+                    control.setAlpha(1f);
+                }
+            }
+        }
     }
 
     private void stretchHeaderBackground() {
@@ -222,6 +256,12 @@ final class ReelsFullBleed {
     }
 
     private void restore() {
+        for (View control : headerControls.keySet()) {
+            if (control == null) continue;
+            control.animate().cancel();
+            control.setAlpha(1f);
+        }
+        headerControls.clear();
         if (touched.isEmpty()) return;
         for (View v : touched.keySet()) {
             if (v == null) continue;
