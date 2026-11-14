@@ -1,3 +1,13 @@
+## [1.3.0-dev.2](https://github.com/southstar21dev/southstar21-patches/compare/v1.3.0-dev.1...v1.3.0-dev.2) (2026-11-14)
+
+### 🐛 Bug Fixes
+
+* **Disable Reels:** Keep the Reels tab scrollable with Stop scrolling on ([6fc3983](https://github.com/southstar21dev/southstar21-patches/commit/6fc3983e2c2c351e126fdd8f9252fe8e11593a72))
+
+### ✨ New Features
+
+* **Liquid Glass navigation bar:** Frosted header on Home and Explore ([f825ac6](https://github.com/southstar21dev/southstar21-patches/commit/f825ac68b5db35c2ca6d3685f88f04490e233f25))
+
 ## [1.3.0-dev.1](https://github.com/southstar21dev/southstar21-patches/compare/v1.2.1...v1.3.0-dev.1) (2026-11-14)
 
 ### ✨ New Features
