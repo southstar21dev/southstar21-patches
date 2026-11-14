@@ -1,3 +1,9 @@
+## [1.2.1-dev.1](https://github.com/southstar21dev/southstar21-patches/compare/v1.2.0...v1.2.1-dev.1) (2026-11-14)
+
+### 🐛 Bug Fixes
+
+* **Bypass signature check:** Sharing to other apps opens the share sheet again ([db26926](https://github.com/southstar21dev/southstar21-patches/commit/db2692622f37172b06a430d9bc1c5216b530f2a1))
+
 ## [1.2.0](https://github.com/southstar21dev/southstar21-patches/compare/v1.1.0...v1.2.0) (2026-11-14)
 
 ### 🐛 Bug Fixes
