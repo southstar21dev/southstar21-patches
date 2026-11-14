@@ -12,11 +12,12 @@
   <sub>The Liquid Glass bar in its iOS style (left) and southstar21 style (right), recorded in the settings' live preview.</sub>
 </p>
 
-<h3 align="center">Patches for Instagram, made with Morphe.</h3>
+<h3 align="center">Patches for Instagram and Spotify, made with Morphe.</h3>
 
 <p align="center">
   A Liquid Glass tab bar from iOS 26, Reels gone from your feed, a daily time budget for scrolling,<br>
-  full size profile pictures and a settings menu inside the app to switch each one on and off.
+  full size profile pictures and a settings menu inside the app to switch each one on and off.<br>
+  On Spotify, the same glass for the tab bar and the mini player.
 </p>
 
 <p align="center">
@@ -32,6 +33,7 @@
   <a href="https://github.com/southstar21dev/southstar21-patches/releases"><img alt="Downloads" src="https://img.shields.io/github/downloads/southstar21dev/southstar21-patches/total?label=downloads&style=flat-square&color=1F1A17"></a>
   <a href="https://github.com/southstar21dev/southstar21-patches/actions/workflows/release.yml"><img alt="Release" src="https://img.shields.io/github/actions/workflow/status/southstar21dev/southstar21-patches/release.yml?branch=main&label=build&style=flat-square"></a>
   <img alt="Instagram 454.0.0.54.77" src="https://img.shields.io/badge/Instagram-454.0.0.54.77-1F1A17?style=flat-square&logo=instagram&logoColor=F5ECD7">
+  <img alt="Spotify 9.2.0.2053" src="https://img.shields.io/badge/Spotify-9.2.0.2053-1F1A17?style=flat-square&logo=spotify&logoColor=F5ECD7">
   <a href="https://morphe.software"><img alt="Morphe" src="https://img.shields.io/badge/Morphe-patches-1F1A17?style=flat-square"></a>
   <a href="LICENSE"><img alt="License GPL-3.0" src="https://img.shields.io/badge/license-GPL--3.0-1F1A17?style=flat-square"></a>
 </p>
@@ -40,13 +42,15 @@
 
 1. Install [Morphe Manager](https://morphe.software) on your phone.
 2. Add this repo as a patch source: **[add southstar21 Patches to Morphe](https://morphe.software/add-source?github=southstar21dev/southstar21-patches)**. Or download `patches-x.y.z.mpp` from [Releases](https://github.com/southstar21dev/southstar21-patches/releases) and add it as a local file.
-3. Download the Instagram **APKM** bundle from APKMirror, in a version listed under [Patches](#patches).
+3. Download the Instagram or Spotify **APKM** bundle from APKMirror, in a version listed under [Patches](#patches).
 4. Patch it in Morphe Manager, choose the patches you want and install the result.
 
 Patched apps are signed with a different key, so uninstall the Play Store version first.
 
+Spotify checks the app when you log in: a patched Spotify logs in on a regular phone, but is refused on emulators and other devices that fail Google's integrity check.
+
 > [!WARNING]
-> Instagram's terms don't allow modified clients. Use these patches at your own risk.
+> Instagram's and Spotify's terms don't allow modified clients. Use these patches at your own risk.
 
 ## Patches
 
@@ -68,7 +72,7 @@ Patched apps are signed with a different key, so uninstall the Play Store versio
 | [Disable Reels](#disable-reels) | Removes reels from the home feed and Explore, and stops scrolling from one reel to the next. Each part is off until you switch it on in the settings. |  |
 | [Hide ads](#hide-ads) | Removes sponsored posts, stories and reels, and ad units in the home feed. Each part can be switched off in the settings. |  |
 | [Hide navigation buttons](#hide-navigation-buttons) | Adds settings to hide Search, Reels, Create, Messages and other tabs from the bottom bar. Every tab stays until you hide it in the settings. |  |
-| [Liquid Glass navigation bar](#liquid-glass-navigation-bar) | Turns the bottom tab bar into a floating iOS 26 style Liquid Glass pill with live background blur and edge refraction. Refraction needs Android 13+, blur needs Android 12+, older versions get a tinted pill. | • Blur radius<br>• Refraction strength<br>• Extend content behind bar |
+| [Liquid Glass navigation bar](#liquid-glass-navigation-bar-instagram) | Turns the bottom tab bar into a floating iOS 26 style Liquid Glass pill with live background blur and edge refraction. Refraction needs Android 13+, blur needs Android 12+, older versions get a tinted pill. | • Blur radius<br>• Refraction strength<br>• Extend content behind bar |
 | [Remove build expired popup](#remove-build-expired-popup) | Removes the popup that appears after a while, when the app version ages. |  |
 | [View profile picture](#view-profile-picture) | Adds a button on the profile picture of profile pages that shows the profile picture in full resolution and saves it to the gallery. |  |
 
@@ -76,7 +80,7 @@ Patched apps are signed with a different key, so uninstall the Play Store versio
 
 <!-- PATCHES_END -->
 
-### Liquid Glass navigation bar
+### Liquid Glass navigation bar (Instagram)
 
 Instagram's iOS 26 Liquid Glass design on Android, matched against screen recordings of the iOS app.
 
@@ -200,6 +204,30 @@ Instagram checks its own signature, which a patched app no longer matches. This 
 ### Remove build expired popup
 
 Removes the popup Instagram shows once the installed version has aged, asking you to update.
+
+### Liquid Glass navigation bar (Spotify)
+
+Spotify's bottom tab bar and the mini player above it as Liquid Glass, in the southstar21 style.
+
+- **Floating glass tab bar.** A clear glass pill, 8 dp from the screen edges, with live blur and a strongly refracting rim. The selected tab's icon and label turn Spotify green.
+- **Glass mini player.** The now playing card above the bar gets the same glass, corners and width, instead of its album-colored background.
+- **Gliding selection.** Press the selected tab and it swells into a drop of clear glass you can drag between tabs, with a tick per tab; let go to open the tab underneath. Taps go to Spotify untouched.
+- **Easy on the battery.** The glass only redraws while what's behind it can move (scrolling, layout changes), not every frame.
+
+Spotify has no settings menu yet, so the look comes from the patch options in Morphe Manager. Android 13+ gets the full effect, Android 12 gets blur without refraction, and older versions get a translucent tinted pill.
+
+| Option | Default | |
+|---|---|---|
+| Blur radius | 4 dp | How frosted the glass is (0 to 40). |
+| Refraction strength | 100 | How strongly the rim bends what's behind it (0 to 100). |
+| southstar21 style | on | Thick glass and the swelling drop. Off gives the iOS style grey capsule. |
+
+<details>
+<summary>How it works</summary>
+
+A hook in `SpotifyMainActivity.onWindowFocusChanged` (unobfuscated) starts the extension, which finds the tab bar and the mini player by their resource names and gives them the glass background used for Instagram. Spotify draws all its tabs in one Compose view, so the selection follows stand-in views laid over each tab, and the selected tab is read from which label Spotify draws white. A small shader on the tab bar turns that white into Spotify green.
+
+</details>
 
 ## Settings menu
 
