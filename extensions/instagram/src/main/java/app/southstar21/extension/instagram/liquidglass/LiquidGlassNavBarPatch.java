@@ -65,6 +65,17 @@ public final class LiquidGlassNavBarPatch {
                     + "glass and the blur at the bottom of the screen had nothing to blur. With this on, videos "
                     + "play the other way Instagram supports, which the glass can see. Takes effect after "
                     + "Instagram restarts.");
+    static final BooleanSetting HEADER_BLUR = new BooleanSetting("liquid_glass_header_blur",
+            "Blur under the header", "Home and Explore scroll under a frosted header, up to the top of the "
+            + "screen.", true, true)
+            .help("Like the blur behind the bar at the bottom: on Home and Explore the feed runs under the "
+                    + "header and the status bar, and is blurred and faded towards the top edge of the "
+                    + "screen. Takes effect after Instagram restarts.");
+    static final BooleanSetting GLASS_HEADER_BUTTONS = new BooleanSetting("liquid_glass_header_buttons",
+            "Glass header buttons", "The header's icons get glass circles while you scroll fast, like iOS.", true, true)
+            .help("On iOS 26 the buttons in the Home and Explore headers (new post, notifications, saved, "
+                    + "more) blend into the header at rest and get round pieces of glass while the feed "
+                    + "scrolls fast. Takes effect after Instagram restarts.");
     static final BooleanSetting HAPTICS = new BooleanSetting("liquid_glass_haptics",
             "Haptics", "A tick when the selection glides over a tab.", false, true)
             .help("A light tick each time the selection glides over another tab while you drag it.");
@@ -74,7 +85,7 @@ public final class LiquidGlassNavBarPatch {
             "iOS 26 style glass tab bar. Defaults come from the patch options in Morphe Manager.",
             LiquidGlassNavBarPatch::isIncluded,
             new SettingsGroup("Behavior", EXTEND_CONTENT, SHRINK_ON_SCROLL,
-                    NavbarStyle.SHRUNK_SIZE.shownWhen(SHRINK_ON_SCROLL), BLUR_VIDEOS, HAPTICS))
+                    NavbarStyle.SHRUNK_SIZE.shownWhen(SHRINK_ON_SCROLL), HEADER_BLUR, GLASS_HEADER_BUTTONS.shownWhen(HEADER_BLUR), BLUR_VIDEOS, HAPTICS))
             .customize("Customize navbar", "Glass, shape and selection, with a live preview.",
                     NavbarPreview::customizer,
                     new SettingsGroup("Style", "The southstar21 style moves differently: the bar shrinks back "

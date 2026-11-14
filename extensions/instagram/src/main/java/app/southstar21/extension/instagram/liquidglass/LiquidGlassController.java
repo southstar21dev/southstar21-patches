@@ -43,6 +43,8 @@ final class LiquidGlassController implements ViewTreeObserver.OnPreDrawListener 
     private final float density;
     /** Progressive blur behind the pill. Null if it can't be added. */
     private EdgeBlurView bottomBlur;
+    /** Progressive blur under the Home and Explore headers. Null when switched off or in a preview. */
+    private HeaderBlurController headerBlur;
     private final int[] location = new int[2];
     /** How far the bar's container stops short of the screen bottom for the navigation bar. */
     private int bottomInset;
@@ -128,6 +130,11 @@ final class LiquidGlassController implements ViewTreeObserver.OnPreDrawListener 
             lens.setOutlineProvider(null);
         }
 
+        if (!preview && LiquidGlassNavBarPatch.HEADER_BLUR.get()) {
+            headerBlur = new HeaderBlurController(bar.getRootView(), density,
+                    LiquidGlassNavBarPatch.GLASS_HEADER_BUTTONS.get());
+        }
+
         android.view.Window window = BackdropSampler.windowOf(bar.getContext());
         if (window != null && !preview) TouchRouter.install(window, lens);
 
@@ -181,6 +188,15 @@ final class LiquidGlassController implements ViewTreeObserver.OnPreDrawListener 
                 glass.invalidateSelf();
             }
             lens.sync();
+            if (headerBlur != null) {
+                try {
+                    headerBlur.onPreDraw(isDark());
+                } catch (Throwable t) {
+                    // Keep the bar working if the header can't be handled.
+                    headerBlur = null;
+                    android.util.Log.e(LiquidGlassNavBarPatch.TAG, "Disabling the header blur", t);
+                }
+            }
             if (bar.getVisibility() == View.VISIBLE && !preview) {
                 glass.getPill().round(sampleRect);
                 sampler.maybeSample(sampleRect, dp(20));
