@@ -51,7 +51,7 @@ Patched apps are signed with a different key, so uninstall the Play Store versio
 ## Patches
 
 <!-- PATCHES_START EXPANDED -->
-> **[v1.2.1-dev.1](https://github.com/southstar21dev/southstar21-patches/releases/tag/v1.2.1-dev.1)**&nbsp;&nbsp;•&nbsp;&nbsp;`dev`&nbsp;&nbsp;•&nbsp;&nbsp;8 patches total
+> **[v1.2.1](https://github.com/southstar21dev/southstar21-patches/releases/tag/v1.2.1)**&nbsp;&nbsp;•&nbsp;&nbsp;`main`&nbsp;&nbsp;•&nbsp;&nbsp;8 patches total
 <details open>
 <summary>📦 Instagram&nbsp;&nbsp;•&nbsp;&nbsp;8 patches</summary>
 <br>
