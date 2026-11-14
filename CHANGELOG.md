@@ -1,3 +1,9 @@
+## [1.3.0-dev.1](https://github.com/southstar21dev/southstar21-patches/compare/v1.2.1...v1.3.0-dev.1) (2026-11-14)
+
+### ✨ New Features
+
+* **Spotify:** Liquid Glass navigation bar and mini player ([9963b4a](https://github.com/southstar21dev/southstar21-patches/commit/9963b4ac5a579b33dab4c45bc29f5aa1d6b35589))
+
 ## [1.2.1](https://github.com/southstar21dev/southstar21-patches/compare/v1.2.0...v1.2.1) (2026-11-14)
 
 ### 🐛 Bug Fixes
