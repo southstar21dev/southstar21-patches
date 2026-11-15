@@ -1,3 +1,9 @@
+## [1.3.0-dev.3](https://github.com/southstar21dev/southstar21-patches/compare/v1.3.0-dev.2...v1.3.0-dev.3) (2026-11-15)
+
+### 🐛 Bug Fixes
+
+* **Liquid Glass navigation bar:** Keep the reel comment box above the navigation bar ([65d607d](https://github.com/southstar21dev/southstar21-patches/commit/65d607d6417c1cf057e5b21334c65f2422501e49))
+
 ## [1.3.0-dev.2](https://github.com/southstar21dev/southstar21-patches/compare/v1.3.0-dev.1...v1.3.0-dev.2) (2026-11-14)
 
 ### 🐛 Bug Fixes
