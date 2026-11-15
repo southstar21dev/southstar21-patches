@@ -10,10 +10,14 @@ name: Verify patches
 #          that version (one .apkm per version code, as builds of one version are obfuscated
 #          differently), named as APKMirror does: <package>_<version>-<version code>_....apkm
 #   token: secrets.TEST_APKS_TOKEN, a fine-grained token with read access to that repo's contents
-# Without the token the check is skipped with a warning, so releases aren't blocked.
+# Without the token the check is skipped with a warning, except on dev and main, where it fails:
+# nothing is released unverified.
 
 on:
   workflow_call:
+    secrets:
+      TEST_APKS_TOKEN:
+        required: false
   workflow_dispatch:
 
 permissions:
@@ -35,29 +39,47 @@ jobs:
   verify:
     name: Patch supported versions
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Check for test APKs
         id: apks
         env:
           TOKEN: ${{ secrets.TEST_APKS_TOKEN }}
         run: |
-          if [ -z "$TOKEN" ]; then
+          if [ -n "$TOKEN" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          elif [ "$GITHUB_REF_NAME" = "dev" ] || [ "$GITHUB_REF_NAME" = "main" ]; then
+            echo "::error title=Patches not verified::The TEST_APKS_TOKEN secret is missing, so the patches can't be verified and nothing is released from $GITHUB_REF_NAME."
+            exit 1
+          else
             echo "::warning title=Patches not verified::Set the TEST_APKS_TOKEN secret to patch the supported app versions before each release."
             echo "available=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "available=true" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Checkout
         if: steps.apks.outputs.available == 'true'
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # The CLI below has to run the patcher these patches are built for.
+      - name: Check the patcher version
+        if: steps.apks.outputs.available == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: .github/scripts/check_patcher_version.sh "$MORPHE_CLI_VERSION"
 
       - name: Setup Java
         if: steps.apks.outputs.available == 'true'
-        uses: actions/setup-java@v6
+        uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
         with:
           distribution: 'temurin'
           java-version: '21'
+
+      # Only dev and main write the cache; other branches read the one main wrote.
+      - name: Setup Gradle
+        if: steps.apks.outputs.available == 'true'
+        uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/dev' }}
 
       - name: Build patches
         if: steps.apks.outputs.available == 'true'
