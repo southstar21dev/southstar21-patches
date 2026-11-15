@@ -9,7 +9,10 @@ on:
     branches-ignore:
       - dev
       - main
+  # Not the dev to main pull request: dev is already verified by release.yml.
   pull_request:
+    branches:
+      - dev
 
 permissions:
   contents: read
