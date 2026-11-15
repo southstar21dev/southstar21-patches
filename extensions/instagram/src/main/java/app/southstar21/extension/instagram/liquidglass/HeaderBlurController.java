@@ -37,6 +37,8 @@ import java.util.WeakHashMap;
  */
 final class HeaderBlurController {
     private static final long SCAN_INTERVAL_MS = 500;
+    /** After a full screen page closes, look for the header every frame for this long. */
+    private static final long EAGER_SCAN_MS = 600;
     /** Scrolling faster than this (dp per ms) shows the glass circles, like iOS. */
     private static final float FAST_SCROLL_DP_PER_MS = 1.2f;
     /** How long the circles stay after the scrolling slows down, and how long they fade. */
@@ -62,6 +64,9 @@ final class HeaderBlurController {
     private static final WeakHashMap<View, TopShift> shifts = new WeakHashMap<>();
     private final int[] location = new int[2];
     private long lastScan;
+    private long scanEveryFrameUntil;
+    /** This frame changed a size, margin or padding (a stale frame would show the old layout). */
+    private boolean relaidOut;
 
     private static final class Header {
         /** Instagram's header view, and the view it slides away while scrolling. */
@@ -115,10 +120,11 @@ final class HeaderBlurController {
             this.list = new WeakReference<>(list);
         }
 
-        void apply(int inset) {
+        /** @return whether the layout changed */
+        boolean apply(int inset) {
             View c = container.get();
             View l = list.get();
-            if (c == null || l == null || !(c.getLayoutParams() instanceof ViewGroup.MarginLayoutParams)) return;
+            if (c == null || l == null || !(c.getLayoutParams() instanceof ViewGroup.MarginLayoutParams)) return false;
             ViewGroup.MarginLayoutParams lp = (ViewGroup.MarginLayoutParams) c.getLayoutParams();
             if (lp.topMargin != appliedMargin) baseMargin = lp.topMargin;
             if (l.getPaddingTop() != appliedPadding) basePadding = l.getPaddingTop();
@@ -126,7 +132,7 @@ final class HeaderBlurController {
             int padding = basePadding + inset;
             appliedMargin = margin;
             appliedPadding = padding;
-            if (l.getPaddingTop() == padding && lp.topMargin == margin) return;
+            if (l.getPaddingTop() == padding && lp.topMargin == margin) return false;
             // Depending on timing a list keeps its items' old coordinates across the change, which
             // moves them by up to the inset. Note where the first item is on screen and scroll it
             // back there once the list has been laid out again.
@@ -140,6 +146,7 @@ final class HeaderBlurController {
                 lp.topMargin = margin;
                 c.setLayoutParams(lp);
             }
+            return true;
         }
 
         private static void keepInPlace(View list, View anchor) {
@@ -181,10 +188,24 @@ final class HeaderBlurController {
         return res.getIdentifier(name, "id", "com.instagram.android");
     }
 
-    /** Once a frame: picks up new headers now and then, and keeps the installed ones in shape. */
-    void onPreDraw(boolean dark) {
+    /**
+     * A full screen page (a reel opened from the feed) is closing: Home or Explore comes back,
+     * possibly with a new header. Find it on the first frame it shows instead of up to a scan
+     * interval later, when the frosted header would pop in.
+     */
+    void rescanSoon() {
+        scanEveryFrameUntil = SystemClock.uptimeMillis() + EAGER_SCAN_MS;
+    }
+
+    /**
+     * Once a frame: picks up new headers now and then, and keeps the installed ones in shape.
+     *
+     * @return whether the layout changed, so the frame about to be drawn is stale
+     */
+    boolean onPreDraw(boolean dark) {
+        relaidOut = false;
         long now = SystemClock.uptimeMillis();
-        if (now - lastScan > SCAN_INTERVAL_MS) {
+        if (now - lastScan > SCAN_INTERVAL_MS || now < scanEveryFrameUntil) {
             lastScan = now;
             found.clear();
             collectHeaders(root);
@@ -207,6 +228,7 @@ final class HeaderBlurController {
             }
             enforce(h, dark);
         }
+        return relaidOut;
     }
 
     private void collectHeaders(View view) {
@@ -248,6 +270,7 @@ final class HeaderBlurController {
         EdgeBlurView blur = new EdgeBlurView(header.getContext(), density, true);
         page.addView(blur, page.indexOfChild(wrapper), new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 1, Gravity.TOP));
+        relaidOut = true;
         headers.put(header, new Header(header, wrapper, page, blur, dividerId));
     }
 
@@ -274,7 +297,7 @@ final class HeaderBlurController {
 
         int inset = statusBarInset(h.page);
         View scroller = scroller(h);
-        if (h.shift != null) h.shift.apply(inset);
+        if (h.shift != null && h.shift.apply(inset)) relaidOut = true;
         if (scroller != null && inset > 0) {
             // The list's padding now covers the status bar: let content show there.
             if (scroller instanceof ViewGroup && ((ViewGroup) scroller).getClipToPadding()) {
@@ -292,6 +315,7 @@ final class HeaderBlurController {
             lp.topMargin = -inset;
             lp.gravity = Gravity.TOP;
             h.blur.setLayoutParams(lp);
+            relaidOut = true;
         }
 
         // Follow the header when Instagram slides it away while scrolling. The status bar part
@@ -486,7 +510,7 @@ final class HeaderBlurController {
     private View scroller(Header h) {
         View scroller = h.scroller != null ? h.scroller.get() : null;
         if (scroller != null && scroller.isAttachedToWindow() && isInside(scroller, h.page)) return scroller;
-        if (h.shift != null) h.shift.apply(0);
+        if (h.shift != null && h.shift.apply(0)) relaidOut = true;
         scroller = findScroller(h);
         h.scroller = scroller != null ? new WeakReference<>(scroller) : null;
         h.shift = null;
@@ -495,7 +519,7 @@ final class HeaderBlurController {
             View container = childOfPage(scroller, h.page);
             TopShift shift = shifts.get(scroller);
             if (shift == null || shift.container.get() != container) {
-                if (shift != null) shift.apply(0);
+                if (shift != null && shift.apply(0)) relaidOut = true;
                 shift = new TopShift(container, scroller);
                 shifts.put(scroller, shift);
             }
