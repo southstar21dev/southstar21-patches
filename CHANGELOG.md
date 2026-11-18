@@ -1,3 +1,13 @@
+## [1.3.0-dev.7](https://github.com/southstar21dev/southstar21-patches/compare/v1.3.0-dev.6...v1.3.0-dev.7) (2026-11-18)
+
+### 🐛 Bug Fixes
+
+* **YouTube Music:** Start the tab lens on Home after a cold start ([5bf34c4](https://github.com/southstar21dev/southstar21-patches/commit/5bf34c4bbd9f852b8cfd9167e266ed526b7ea2ae))
+
+### ✨ New Features
+
+* **YouTube Music:** Liquid glass on the full player ([a606c1c](https://github.com/southstar21dev/southstar21-patches/commit/a606c1ce040701e4af2e19975ed7a429fca86680))
+
 ## [1.3.0-dev.6](https://github.com/southstar21dev/southstar21-patches/compare/v1.3.0-dev.5...v1.3.0-dev.6) (2026-11-18)
 
 ### ✨ New Features
