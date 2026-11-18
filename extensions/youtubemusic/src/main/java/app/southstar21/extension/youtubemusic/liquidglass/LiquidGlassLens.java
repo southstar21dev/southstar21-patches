@@ -520,6 +520,10 @@ final class LiquidGlassLens extends View {
                 && lastSelected.getVisibility() != GONE) {
             selected = lastSelected;
         }
+        // On a cold start YouTube Music opens Home without marking any tab selected, so the lens
+        // had nowhere to sit and flew in from nowhere on the first press. Start it on the first
+        // tab (Home) until YouTube Music selects one.
+        if (selected == null && lastSelected == null) selected = firstLaidOutTab();
         if (selected != lastSelected && lastSelected != null) expand();
         applyMinimize(selected);
         if (southstar21) glass.setGlow(glow.value, x.value + getLeft() - bar.getLeft());
@@ -690,6 +694,14 @@ final class LiquidGlassLens extends View {
             previous = child;
         }
         return previous;
+    }
+
+    /** The first visible tab once it's laid out, or null. */
+    private View firstLaidOutTab() {
+        for (View child : tabs.views()) {
+            if (child.getVisibility() == VISIBLE) return child.getWidth() > 0 ? child : null;
+        }
+        return null;
     }
 
     private void updatePill() {
@@ -1141,7 +1153,7 @@ final class LiquidGlassLens extends View {
     // endregion
 
     /** Damped spring, integrated with small fixed sub-steps for stability. */
-    private static final class Spring {
+    static final class Spring {
         float stiffness;
         float damping;
         final float epsilon;
