@@ -1,3 +1,9 @@
+## [1.3.0-dev.4](https://github.com/southstar21dev/southstar21-patches/compare/v1.3.0-dev.3...v1.3.0-dev.4) (2026-11-18)
+
+### ✨ New Features
+
+* **YouTube Music:** Liquid Glass navigation bar and mini player ([3f0cccc](https://github.com/southstar21dev/southstar21-patches/commit/3f0cccc4b3f5fc920f6e9364008992616afa612b))
+
 ## [1.3.0-dev.3](https://github.com/southstar21dev/southstar21-patches/compare/v1.3.0-dev.2...v1.3.0-dev.3) (2026-11-15)
 
 ### 🐛 Bug Fixes
