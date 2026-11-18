@@ -1,12 +1,13 @@
 name: Verify patches
 
-# Patches every supported version of every app (Instagram, Spotify) with the same Morphe Patcher
+# Patches every supported version of every app (Instagram, Spotify, YouTube Music) with the same Morphe Patcher
 # that Morphe Manager uses, and fails if any of that app's patches doesn't apply. Runs before each
 # release, and can be started by hand.
 #
 # The APKMs can't live in this public repo, so they're release assets of a private repo:
 #   repo:  vars.TEST_APKS_REPO (default southstar21dev/test-apks)
-#   tag:   <app>-<version> (instagram-454.0.0.54.77, spotify-9.2.0.2053), holding each build of
+#   tag:   <app>-<version> (instagram-454.0.0.54.77, spotify-9.2.0.2053, youtubemusic-9.46.51),
+#          holding each build of
 #          that version (one .apkm per version code, as builds of one version are obfuscated
 #          differently), named as APKMirror does: <package>_<version>-<version code>_....apkm
 #   token: secrets.TEST_APKS_TOKEN, a fine-grained token with read access to that repo's contents
@@ -29,11 +30,12 @@ env:
   # Keep this in step with the patcher Morphe Manager ships.
   MORPHE_CLI_VERSION: v2.1.1
   TEST_APKS_REPO: ${{ vars.TEST_APKS_REPO || 'southstar21dev/test-apks' }}
-  # Each app: <folder under patches/.../patches/>:<package name>:<display name>. Its supported
+  # Each app: <folder under patches/.../patches/>:<package name>:<display name, _ for spaces>. Its supported
   # versions are read from that folder's shared/Constants.kt.
   APPS: >-
     instagram:com.instagram.android:Instagram
     spotify:com.spotify.music:Spotify
+    youtubemusic:com.google.android.apps.youtube.music:YouTube_Music
 
 jobs:
   verify:
@@ -103,6 +105,7 @@ jobs:
         run: |
           for app in $APPS; do
             IFS=: read -r folder _ label <<< "$app"
+            label=${label//_/ }
             constants="patches/src/main/kotlin/app/southstar21/patches/$folder/shared/Constants.kt"
             versions=$(grep -oE 'version = "[^"]+"' "$constants" | sed -E 's/version = "(.*)"/\1/')
             if [ -z "$versions" ]; then
@@ -135,6 +138,7 @@ jobs:
 
           for app in $APPS; do
             IFS=: read -r folder package label <<< "$app"
+            label=${label//_/ }
             # This app's patches, every one switched on, including ones that are off by default.
             # (Two apps can have a patch of the same name; the CLI only applies the one made for
             # the app it's patching.)
