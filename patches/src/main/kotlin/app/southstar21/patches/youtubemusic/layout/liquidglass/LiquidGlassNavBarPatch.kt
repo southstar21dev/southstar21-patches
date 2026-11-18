@@ -8,6 +8,7 @@ import app.morphe.patcher.patch.booleanOption
 import app.morphe.patcher.patch.bytecodePatch
 import app.morphe.patcher.patch.intOption
 import app.southstar21.patches.youtubemusic.misc.extension.markYouTubeMusicPatchIncluded
+import app.southstar21.patches.youtubemusic.misc.extension.requireGmsCoreSupport
 import app.southstar21.patches.youtubemusic.misc.extension.youTubeMusicSharedExtensionPatch
 import app.southstar21.patches.youtubemusic.shared.Constants.COMPATIBILITY_YOUTUBE_MUSIC
 import com.android.tools.smali.dexlib2.Opcode
@@ -30,7 +31,8 @@ val youTubeMusicLiquidGlassNavBarPatch = bytecodePatch(
     name = "Liquid Glass navigation bar",
     description = "Turns the bottom tab bar and the mini player above it into floating iOS 26 style " +
         "Liquid Glass with live background blur and edge refraction, with the content scrolling on behind them. " +
-        "Refraction needs Android 13+, blur needs Android 12+, older versions get a tinted pill.",
+        "Refraction needs Android 13+, blur needs Android 12+, older versions get a tinted pill. " +
+        "Requires Morphe Patches with GmsCore support, applied together in Expert mode.",
     default = true,
 ) {
     compatibleWith(COMPATIBILITY_YOUTUBE_MUSIC)
@@ -122,5 +124,10 @@ val youTubeMusicLiquidGlassNavBarPatch = bytecodePatch(
         }
 
         markYouTubeMusicPatchIncluded(EXTENSION_CLASS)
+    }
+
+    // Stops the build without Morphe Patches' GmsCore support (see requireGmsCoreSupport).
+    finalize {
+        requireGmsCoreSupport()
     }
 }
