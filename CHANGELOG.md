@@ -1,3 +1,9 @@
+## [1.3.0-dev.6](https://github.com/southstar21dev/southstar21-patches/compare/v1.3.0-dev.5...v1.3.0-dev.6) (2026-11-18)
+
+### ✨ New Features
+
+* **YouTube Music:** Dock the mini player beside the tab bar ([9c6043f](https://github.com/southstar21dev/southstar21-patches/commit/9c6043fe6bb37875b19417e042389b31d3990aef))
+
 ## [1.3.0-dev.5](https://github.com/southstar21dev/southstar21-patches/compare/v1.3.0-dev.4...v1.3.0-dev.5) (2026-11-18)
 
 ### ✨ New Features
