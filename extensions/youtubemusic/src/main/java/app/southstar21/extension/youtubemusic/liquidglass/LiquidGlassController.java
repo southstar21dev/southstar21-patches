@@ -201,7 +201,7 @@ final class LiquidGlassController implements ViewTreeObserver.OnPreDrawListener 
             ViewGroup strip = tabs.strip();
             boolean relayout = (!wasRequested && bar.isLayoutRequested())
                     || (strip != null && strip.isLayoutRequested());
-            if (relayout && skippedFrames < 3) {
+            if (relayout && !dockMoved && skippedFrames < 3) {
                 skippedFrames++;
                 return false;
             }
@@ -225,6 +225,7 @@ final class LiquidGlassController implements ViewTreeObserver.OnPreDrawListener 
 
         updateSystemBarInsets();
         enforceGeometry();
+        enforceDock();
         enforceStripPadding();
         enforceEdgeBlurs(refresh);
     }
@@ -272,7 +273,12 @@ final class LiquidGlassController implements ViewTreeObserver.OnPreDrawListener 
             bottomBlur.setLayoutParams(lp);
         }
         bottomBlur.setDark(dark);
-        int visibility = barShown ? View.VISIBLE : View.GONE;
+        // YouTube Music slides the bar down (then hides it) as the full player opens: fade the
+        // blur out along with it rather than dropping it the moment the bar goes.
+        float slid = bar.getHeight() > 0 ? bar.getTranslationY() / bar.getHeight() : 0f;
+        float alpha = Math.max(0f, Math.min(1f, 1f - slid));
+        if (bottomBlur.getAlpha() != alpha) bottomBlur.setAlpha(alpha);
+        int visibility = barShown && alpha > 0f ? View.VISIBLE : View.GONE;
         if (bottomBlur.getVisibility() != visibility) bottomBlur.setVisibility(visibility);
         // Like the glass: re-recording what's behind it every frame kept the app drawing.
         if (barShown && refresh) bottomBlur.invalidate();
@@ -311,8 +317,57 @@ final class LiquidGlassController implements ViewTreeObserver.OnPreDrawListener 
                 + 0.0722f * Color.blue(color)) / 255f;
     }
 
+    /** 0 = the bar spans the row, 1 = it makes room for the docked player on its right. */
+    private float dockProgress;
+    /** The bar's margin changed in this pre-draw: its new layout is one frame behind, which is fine. */
+    private boolean dockMoved;
+
+    /**
+     * Narrows the bar from the right while a mini player is on screen (see {@link Dock}),
+     * easing a step each frame. The bar moves with a right margin rather than the pill's
+     * insets, so the docked player's touches never land on the bar.
+     */
+    private void enforceDock() {
+        dockMoved = false;
+        float target = Dock.resting && Dock.playerShown && Dock.rightInset >= 0 ? 1f : 0f;
+        if (dockProgress != target && (bar.getVisibility() != View.VISIBLE || bar.getTranslationY() != 0f)) {
+            // Nobody sees the bar move while it's hidden or sliding: change it in one step
+            // rather than a relayout every frame.
+            dockProgress = target;
+        } else if (dockProgress != target) {
+            dockProgress += (target - dockProgress) * 0.3f;
+            if (Math.abs(target - dockProgress) < 0.01f) dockProgress = target;
+            else bar.postInvalidateOnAnimation();
+        }
+        int margin = Math.round(dockProgress * dp(Dock.WIDTH_DP + Dock.GAP_DP));
+        if (setRightMargin(bar, margin)) dockMoved = true;
+        setRightMargin(lens, margin);
+        // The edge blur sits above the player: keep it off the docked capsule.
+        if (bottomBlur != null) {
+            if (Dock.capsuleShown && bottomBlur.getHeight() > 0) {
+                // The capsule wherever it is now: it rises out of the blur as the player opens.
+                bottomBlur.getLocationOnScreen(location);
+                bottomBlur.setHole(Dock.capsule.left - location[0], Dock.capsule.top - location[1],
+                        Dock.capsule.right - location[0], Dock.capsule.bottom - location[1]);
+            } else {
+                bottomBlur.setHole(0, 0, 0, 0);
+            }
+        }
+    }
+
+    private static boolean setRightMargin(View view, int margin) {
+        ViewGroup.LayoutParams lp = view.getLayoutParams();
+        if (!(lp instanceof ViewGroup.MarginLayoutParams)) return false;
+        ViewGroup.MarginLayoutParams mlp = (ViewGroup.MarginLayoutParams) lp;
+        if (mlp.rightMargin == margin) return false;
+        mlp.rightMargin = margin;
+        view.setLayoutParams(mlp);
+        return true;
+    }
+
     private void enforceGeometry() {
-        int width = bar.getWidth();
+        // The whole row's width: the bar's own shrinks while the player is docked.
+        int width = ((View) bar.getParent()).getWidth();
         if (width <= 0) return;
         NavbarStyle style = styleSource.get();
         if (style.version != appliedStyleVersion) {
@@ -339,6 +394,7 @@ final class LiquidGlassController implements ViewTreeObserver.OnPreDrawListener 
             basePadBottom = bar.getPaddingBottom();
             appliedForWidth = -1;
         }
+        Dock.barPadTop = basePadTop;
 
         // Keep the lens as tall as the bar plus its overhang.
         ViewGroup.LayoutParams lensLp = lens.getLayoutParams();
@@ -364,6 +420,9 @@ final class LiquidGlassController implements ViewTreeObserver.OnPreDrawListener 
         int usable = width - basePadLeft - basePadRight;
         if (usable - 2 * side > maxPill) side = (usable - maxPill) / 2;
         int inner = dp(style.tabInsetDp);
+        // The docked player ends where the full width pill would.
+        Dock.rightInset = basePadRight + side;
+        Dock.leftInset = basePadLeft + side;
 
         stripLeft = stripRight = side + inner;
         stripTop = grow / 2;

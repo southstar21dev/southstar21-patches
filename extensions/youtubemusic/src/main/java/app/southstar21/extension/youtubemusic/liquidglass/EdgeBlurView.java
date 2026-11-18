@@ -60,6 +60,25 @@ final class EdgeBlurView extends View {
         invalidate();
     }
 
+    /** Left clear, in this view's coordinates: the docked player's capsule (empty for none). */
+    private final android.graphics.RectF hole = new android.graphics.RectF();
+    private final android.graphics.Path holePath = new android.graphics.Path();
+
+    /**
+     * Keeps the effect off {@code left, top, right, bottom} (a capsule): the docked player sits
+     * below this view, and would otherwise be blurred and darkened with the content.
+     */
+    void setHole(float left, float top, float right, float bottom) {
+        if (hole.left == left && hole.top == top && hole.right == right && hole.bottom == bottom) return;
+        hole.set(left, top, right, bottom);
+        holePath.reset();
+        if (!hole.isEmpty()) {
+            float r = hole.height() / 2f;
+            holePath.addRoundRect(hole, r, r, android.graphics.Path.Direction.CW);
+        }
+        invalidate();
+    }
+
     @Override
     protected void onDraw(Canvas canvas) {
         int w = getWidth();
@@ -67,10 +86,13 @@ final class EdgeBlurView extends View {
         if (w <= 0 || h <= 0) return;
         updateGradients(h);
 
+        int save = canvas.save();
+        if (!hole.isEmpty()) canvas.clipOutPath(holePath);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && canvas.isHardwareAccelerated()) {
             drawBlur(canvas, w, h);
         }
         canvas.drawRect(0, 0, w, h, fadePaint);
+        canvas.restoreToCount(save);
     }
 
     private void drawBlur(Canvas canvas, int w, int h) {

@@ -113,7 +113,7 @@ Patching YouTube Music without GmsCore support stops with a message saying so, r
 
 | 💊&nbsp;Patch | 📜&nbsp;Description | ⚙️&nbsp;Options |
 |----------|----------------|-----------|
-| [Liquid Glass navigation bar](#liquid-glass-navigation-bar-youtube-music) | Turns the bottom tab bar and the mini player above it into floating iOS 26 style Liquid Glass with live background blur and edge refraction, with the content scrolling on behind them. Refraction needs Android 13+, blur needs Android 12+, older versions get a tinted pill. Requires Morphe Patches with GmsCore support, applied together in Expert mode. | • Blur radius<br>• Refraction strength<br>• southstar21 style |
+| [Liquid Glass navigation bar](#liquid-glass-navigation-bar-youtube-music) | Turns the bottom tab bar into floating iOS 26 style Liquid Glass with live background blur and edge refraction, with the mini player docked beside it as round album art with a progress ring, a glass playback bar above, and the content scrolling on behind them. Refraction needs Android 13+, blur needs Android 12+, older versions get a tinted pill. Requires Morphe Patches with GmsCore support, applied together in Expert mode. | • Blur radius<br>• Refraction strength<br>• southstar21 style |
 
 </details>
 
@@ -271,10 +271,10 @@ A hook in `SpotifyMainActivity.onWindowFocusChanged` (unobfuscated) starts the e
 
 ### Liquid Glass navigation bar (YouTube Music)
 
-YouTube Music's bottom tab bar and the mini player above it as Liquid Glass, with the same glass as on Spotify.
+YouTube Music's bottom tab bar and the mini player as Liquid Glass, with the same glass as on Spotify, and the mini player docked beside the tabs.
 
 - **Floating glass tab bar.** A clear glass capsule, 8 dp from the screen edges, with live blur and a strongly refracting rim. Pressing a tab no longer shows Android's ripple: the glass is the feedback.
-- **Glass mini player.** The mini player becomes a matching glass capsule with round album art. Opening the full player fades the glass out and brings YouTube Music's own background and artwork corners back.
+- **Docked mini player.** While something plays, the tab bar narrows and the mini player shrinks to its round album art beside it, ringed by the song's progress. Above them a full width glass bar shows the title and artist with previous, play/pause and next buttons; tap the title or the art to open the player. Opening the full player fades the glass out and grows the art from its spot by the tabs, bringing YouTube Music's own background and artwork corners back.
 - **Content behind the glass.** Pages scroll on behind the bar and the mini player instead of stopping above them.
 - **Gliding selection.** Press the selected tab and it swells into a drop of clear glass you can drag between tabs; let go to open the tab underneath.
 
@@ -283,7 +283,7 @@ Like on Spotify, the look comes from the patch options in Morphe Manager (blur r
 <details>
 <summary>How it works</summary>
 
-A hook in `MusicActivity.onWindowFocusChanged` (unobfuscated) starts the extension. The tab bar is a Material `TabLayout` (`pivot_bar`); its tab strip's padding shapes the capsule, so the bar's own padding, which YouTube Music keeps resetting, is never touched. `WatchWhileLayout` measures the bar and places the mini player above it, and a second hook in its `onMeasure` gives the content the full height so it runs on behind the glass. The mini player is the top of the player page, whose background is wrapped so it shows the glass while the player is collapsed.
+A hook in `MusicActivity.onWindowFocusChanged` (unobfuscated) starts the extension. The tab bar is a Material `TabLayout` (`pivot_bar`); its tab strip's padding shapes the capsule, so the bar's own padding, which YouTube Music keeps resetting, is never touched. `WatchWhileLayout` measures the bar and rests the player (a bottom sheet) just above it; two hooks in its `onMeasure` give the content the full height so it runs on behind the glass, and lower the player's resting height so the mini player sits in the bar's row. The bar then narrows with a right margin and the mini player with margins of its own, so each keeps its own touches. The album art is placed and sized from the docked slot, blended with YouTube Music's own animation as the player opens. The progress ring, the title and the playback buttons use YouTube Music's media session. The mini player is the top of the player page, whose background is wrapped so it shows the glass while the player is collapsed.
 
 </details>
 

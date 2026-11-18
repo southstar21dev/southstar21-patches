@@ -13,7 +13,9 @@ import app.southstar21.patches.youtubemusic.misc.extension.youTubeMusicSharedExt
 import app.southstar21.patches.youtubemusic.shared.Constants.COMPATIBILITY_YOUTUBE_MUSIC
 import com.android.tools.smali.dexlib2.Opcode
 import com.android.tools.smali.dexlib2.iface.instruction.ReferenceInstruction
+import com.android.tools.smali.dexlib2.iface.instruction.FiveRegisterInstruction
 import com.android.tools.smali.dexlib2.iface.instruction.ThreeRegisterInstruction
+import com.android.tools.smali.dexlib2.iface.instruction.TwoRegisterInstruction
 import com.android.tools.smali.dexlib2.iface.reference.MethodReference
 
 private const val EXTENSION_CLASS =
@@ -29,8 +31,9 @@ private fun extensionMethod(name: String, returnType: String) = Fingerprint(
 @Suppress("unused")
 val youTubeMusicLiquidGlassNavBarPatch = bytecodePatch(
     name = "Liquid Glass navigation bar",
-    description = "Turns the bottom tab bar and the mini player above it into floating iOS 26 style " +
-        "Liquid Glass with live background blur and edge refraction, with the content scrolling on behind them. " +
+    description = "Turns the bottom tab bar into floating iOS 26 style Liquid Glass with live background blur " +
+        "and edge refraction, with the mini player docked beside it as round album art with a progress ring, " +
+        "a glass playback bar above, and the content scrolling on behind them. " +
         "Refraction needs Android 13+, blur needs Android 12+, older versions get a tinted pill. " +
         "Requires Morphe Patches with GmsCore support, applied together in Expert mode.",
     default = true,
@@ -119,6 +122,33 @@ val youTubeMusicLiquidGlassNavBarPatch = bytecodePatch(
                 """
                     invoke-static { v$height, v$full }, $EXTENSION_CLASS->contentHeight(II)I
                     move-result v$height
+                """,
+            )
+
+            // The player (a bottom sheet) rests at `add-int/2addr miniPlayer, bar`, passed straight
+            // to the first BottomSheetBehavior (I)V call (setPeekHeight). Let the extension lower
+            // the mini player's part, so the player rests in the tab bar's row, docked by the tabs.
+            val peekIndex = instructions.indexOfFirst { instruction ->
+                val ref = (instruction as? ReferenceInstruction)?.reference as? MethodReference
+                instruction.opcode == Opcode.INVOKE_VIRTUAL && ref != null &&
+                    ref.definingClass == "Lcom/google/android/material/bottomsheet/BottomSheetBehavior;" &&
+                    ref.returnType == "V" && ref.parameterTypes.map { it.toString() } == listOf("I")
+            }
+            if (peekIndex < 0) throw PatchException("Couldn't find the player's resting height in WatchWhileLayout.onMeasure")
+            val peek = (instructions[peekIndex] as FiveRegisterInstruction).registerD
+            val addIndex = (peekIndex - 1 downTo 0).firstOrNull { i ->
+                val instruction = instructions[i]
+                instruction.opcode == Opcode.ADD_INT_2ADDR && (instruction as TwoRegisterInstruction).registerA == peek
+            } ?: throw PatchException("Couldn't find the mini player's height in WatchWhileLayout.onMeasure")
+            val add = instructions[addIndex] as TwoRegisterInstruction
+            val mini = add.registerA
+            val bar = add.registerB
+            if (mini > 15 || bar > 15) throw PatchException("Unexpected registers in WatchWhileLayout.onMeasure")
+            addInstructions(
+                addIndex,
+                """
+                    invoke-static { v$mini, v$bar }, $EXTENSION_CLASS->miniPlayerHeight(II)I
+                    move-result v$mini
                 """,
             )
         }

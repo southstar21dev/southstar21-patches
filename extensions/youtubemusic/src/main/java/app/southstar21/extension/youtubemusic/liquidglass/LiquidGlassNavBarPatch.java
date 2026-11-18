@@ -52,6 +52,39 @@ public final class LiquidGlassNavBarPatch {
         return contentBehindBar ? full : withoutBar;
     }
 
+    /** YouTube Music's tab bar once the glass is on it. */
+    private static java.lang.ref.WeakReference<View> glassBar;
+    private static float density;
+
+    /**
+     * Called by the patch from WatchWhileLayout.onMeasure, which rests the player (a bottom
+     * sheet) at the mini player's height plus the tab bar's. With the glass bar up the player
+     * rests lower instead, so the mini player sits in the tab bar's row, docked next to the
+     * tabs (see {@link Dock}).
+     *
+     * @param miniPlayer the mini player's height
+     * @param bar        the tab bar's height, with its bottom margin
+     * @return the part of the player's resting height above the tab bar
+     */
+    public static int miniPlayerHeight(int miniPlayer, int bar) {
+        try {
+            View view = glassBar == null ? null : glassBar.get();
+            // Not the bar's visibility: YouTube Music hides the bar while the full player is
+            // open, and undocking for that redid the whole layout on every open and close. A
+            // hidden bar keeps its measured height; one with none has no row to dock in.
+            if (!contentBehindBar || view == null || bar < Math.round(40 * density)) {
+                Dock.resting = false;
+                return miniPlayer;
+            }
+            Dock.resting = true;
+            // The mini player's glass (4dp below its top) lines up with the bar's pill.
+            return Math.round(Dock.TOP_INSET_DP * density) - Dock.barPadTop;
+        } catch (Throwable t) {
+            Log.e(TAG, "miniPlayerHeight", t);
+            return miniPlayer;
+        }
+    }
+
     /** Called by YouTubeMusicHooks whenever the main activity gains or loses focus. */
     public static void onMainActivityReady(Activity activity) {
         try {
@@ -62,6 +95,8 @@ public final class LiquidGlassNavBarPatch {
             LiquidGlassController controller = new LiquidGlassController((ViewGroup) bar, null, true);
             controller.install();
             installed.put(bar, controller);
+            density = bar.getResources().getDisplayMetrics().density;
+            glassBar = new java.lang.ref.WeakReference<>(bar);
             contentBehindBar = true;
             View layout = findView(activity, "watch_while_layout");
             if (layout != null) layout.requestLayout();
@@ -79,13 +114,13 @@ public final class LiquidGlassNavBarPatch {
             View page = findView(activity, "player_page");
             int miniPlayerId = id(activity, "mini_player");
             if (!(page instanceof ViewGroup) || miniPlayerId == 0) return;
-            new MiniPlayerGlass((ViewGroup) page, miniPlayerId, id(activity, "watch_fragment_container")).install();
+            new MiniPlayerGlass(activity, (ViewGroup) page, miniPlayerId, id(activity, "watch_fragment_container")).install();
         } catch (Throwable t) {
             Log.e(TAG, "Failed to install mini player glass", t);
         }
     }
 
-    private static int id(Activity activity, String name) {
+    static int id(Activity activity, String name) {
         Resources res = activity.getResources();
         // Resources keep the original package name even if the app was renamed (GmsCore support).
         int id = res.getIdentifier(name, "id", "com.google.android.apps.youtube.music");
