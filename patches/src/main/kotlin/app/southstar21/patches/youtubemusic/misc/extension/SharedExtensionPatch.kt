@@ -19,7 +19,7 @@ val youTubeMusicSharedExtensionPatch = bytecodePatch {
     execute {
         MusicActivityWindowFocusFingerprint.method.addInstruction(
             0,
-            "invoke-static { p0 }, $YOUTUBE_MUSIC_HOOKS_CLASS->onMainActivityWindowFocusChanged(Landroid/app/Activity;)V"
+            "invoke-static { p0 }, $YOUTUBE_MUSIC_HOOKS_CLASS->onMainActivityWindowFocusChanged(Landroid/app/Activity;)V",
         )
     }
 }
@@ -37,6 +37,6 @@ internal fun markYouTubeMusicPatchIncluded(extensionClass: String) {
         """
             const/4 v0, 0x1
             return v0
-        """
+        """,
     )
 }

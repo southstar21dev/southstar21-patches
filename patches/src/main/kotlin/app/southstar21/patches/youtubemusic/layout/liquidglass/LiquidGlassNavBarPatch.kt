@@ -29,9 +29,9 @@ private fun extensionMethod(name: String, returnType: String) = Fingerprint(
 val youTubeMusicLiquidGlassNavBarPatch = bytecodePatch(
     name = "Liquid Glass navigation bar",
     description = "Turns the bottom tab bar and the mini player above it into floating iOS 26 style " +
-            "Liquid Glass with live background blur and edge refraction, with the content scrolling on behind them. " +
-            "Refraction needs Android 13+, blur needs Android 12+, older versions get a tinted pill.",
-    default = true
+        "Liquid Glass with live background blur and edge refraction, with the content scrolling on behind them. " +
+        "Refraction needs Android 13+, blur needs Android 12+, older versions get a tinted pill.",
+    default = true,
 ) {
     compatibleWith(COMPATIBILITY_YOUTUBE_MUSIC)
 
@@ -69,7 +69,7 @@ val youTubeMusicLiquidGlassNavBarPatch = bytecodePatch(
         default = true,
         title = "southstar21 style",
         description = "Thicker glass, and a press swells the selection into a magnifying drop of glass " +
-                "that wobbles and stretches as you drag it.",
+            "that wobbles and stretches as you drag it.",
         required = true,
     )
 
@@ -79,21 +79,21 @@ val youTubeMusicLiquidGlassNavBarPatch = bytecodePatch(
             """
                 const/16 v0, $blurRadius
                 return v0
-            """
+            """,
         )
         extensionMethod("refractionPercent", "I").method.addInstructions(
             0,
             """
                 const/16 v0, $refractionStrength
                 return v0
-            """
+            """,
         )
         extensionMethod("southstar21Style", "Z").method.addInstructions(
             0,
             """
                 const/4 v0, ${if (southstar21Style == true) 1 else 0}
                 return v0
-            """
+            """,
         )
 
         // The content's height is worked out as `sub-int height, full, barHeight` right before
@@ -105,7 +105,7 @@ val youTubeMusicLiquidGlassNavBarPatch = bytecodePatch(
                 val next = instructions.getOrNull(i + 1) ?: return@indexOfFirst false
                 val ref = (next as? ReferenceInstruction)?.reference as? MethodReference
                 next.opcode == Opcode.INVOKE_STATIC && ref != null && ref.returnType == "V" &&
-                        ref.parameterTypes.map { it.toString() } == listOf("Landroid/view/View;", "I", "I")
+                    ref.parameterTypes.map { it.toString() } == listOf("Landroid/view/View;", "I", "I")
             }
             if (subIndex < 0) throw PatchException("Couldn't find the content height in WatchWhileLayout.onMeasure")
             val sub = instructions[subIndex] as ThreeRegisterInstruction
@@ -117,7 +117,7 @@ val youTubeMusicLiquidGlassNavBarPatch = bytecodePatch(
                 """
                     invoke-static { v$height, v$full }, $EXTENSION_CLASS->contentHeight(II)I
                     move-result v$height
-                """
+                """,
             )
         }
 

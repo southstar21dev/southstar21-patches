@@ -15,12 +15,12 @@ object Constants {
             // WatchWhileLayout.onMeasure) and the bar is found by its resource id, so newer
             // versions will probably work too, but only this is verified.
             AppTarget(
-                version = "9.46.51"
+                version = "9.46.51",
             ),
             AppTarget(
                 version = null,
-                isExperimental = true
-            )
-        )
+                isExperimental = true,
+            ),
+        ),
     )
 }
