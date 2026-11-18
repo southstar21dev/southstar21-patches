@@ -1,3 +1,9 @@
+## [1.3.0-dev.8](https://github.com/southstar21dev/southstar21-patches/compare/v1.3.0-dev.7...v1.3.0-dev.8) (2026-11-18)
+
+### 🐛 Bug Fixes
+
+* **YouTube Music:** Keep the full player's glass whole and steady ([89414e1](https://github.com/southstar21dev/southstar21-patches/commit/89414e1c438b3a1fb692c41e77f8531e213c3744))
+
 ## [1.3.0-dev.7](https://github.com/southstar21dev/southstar21-patches/compare/v1.3.0-dev.6...v1.3.0-dev.7) (2026-11-18)
 
 ### 🐛 Bug Fixes
