@@ -106,11 +106,24 @@ final class MiniPlayerGlass implements ViewTreeObserver.OnPreDrawListener {
     /** When the glass was last redrawn for what's behind it (uptime ms). */
     private long lastRefresh;
     private boolean layoutChanged = true;
-    private final ViewTreeObserver.OnGlobalLayoutListener layoutListener = () -> layoutChanged = true;
+    private final ViewTreeObserver.OnGlobalLayoutListener layoutListener = () -> {
+        layoutChanged = true;
+        fullLayoutChanged = true;
+    };
     /** Views of YouTube Music's this hid for the capsule, shown again when it undocks. */
     private final ArrayList<View> hidden = new ArrayList<>();
     private boolean docked;
     private CharSequence chipTitle, chipSubtitle;
+    private final FullPlayerGlass fullGlass;
+    /** When the full player's blurred art was last redrawn (uptime ms). */
+    private long lastBackdrop;
+    private final int pageBackgroundId, thumbnailId;
+    private View pageBackground, thumbnail;
+    /** The cover image the backdrop was last drawn from. */
+    private Drawable lastCover;
+    /** A layout pass since the full player's glass last looked; kept apart from {@link #layoutChanged}. */
+    private boolean fullLayoutChanged = true;
+    private long lastFullLayout;
 
     MiniPlayerGlass(Activity activity, ViewGroup page, int miniPlayerId, int artId) {
         this.activity = activity;
@@ -128,6 +141,10 @@ final class MiniPlayerGlass implements ViewTreeObserver.OnPreDrawListener {
         this.swipeSubtitleId = LiquidGlassNavBarPatch.id(activity, "swipeable_mini_player_subtitle");
         this.swipeThumbId = LiquidGlassNavBarPatch.id(activity, "swipeable_mini_player_thumbnail_container");
         this.density = page.getResources().getDisplayMetrics().density;
+        this.sheetId = LiquidGlassNavBarPatch.id(activity, "player_bottom_sheet");
+        this.pageBackgroundId = LiquidGlassNavBarPatch.id(activity, "player_page_background");
+        this.thumbnailId = LiquidGlassNavBarPatch.id(activity, "player_thumbnail");
+        this.fullGlass = new FullPlayerGlass(activity, page, canvas -> background.drawUnder(canvas));
         this.glass = new LiquidGlassDrawable(page, density, NavbarStyle::miniPlayer);
         glass.setCallback(background);
         this.chip = makeChip();
@@ -343,9 +360,16 @@ final class MiniPlayerGlass implements ViewTreeObserver.OnPreDrawListener {
             View mini = miniPlayer;
             Dock.playerShown = mini != null && isPlayerShown();
             float shown = mini == null || mini.getWidth() == 0 ? 0f : visibleAlpha(mini);
+            // With the queue sheet pulled up YouTube Music shows its mini player again (the small
+            // cover top right): still the open player, not one closing.
+            boolean pulled = sheetPulled();
+            if (shown > 0f && pulled) shown = 0f;
             background.setGlassAlpha(shown);
             roundArt(shown);
-            boolean dock = Dock.resting && Dock.rightInset >= 0 && page.getWidth() > 0;
+            trackSheet();
+            // Not with the queue sheet up: YouTube Music makes the mini player the bar above it
+            // (cover, title, pause), laid out for its own full width.
+            boolean dock = Dock.resting && Dock.rightInset >= 0 && page.getWidth() > 0 && !pulled;
             if (mini != null && dock != docked) {
                 docked = dock;
                 if (!dock) undock(mini);
@@ -354,6 +378,41 @@ final class MiniPlayerGlass implements ViewTreeObserver.OnPreDrawListener {
             // gone a third of the way up, and the art would jump back to where YouTube Music
             // thinks the mini player is.
             if (docked && mini != null) alignArt(mini, slide(shown));
+            // The full player, while it shows at all: glass on its parts, and its blurred art
+            // backdrop kept up to date (the song can change under it).
+            // (Its own layout flag: the mini player's is only cleared while the mini player shows,
+            // so with the player open it stayed set and the art was re-blurred every frame.)
+            if (shown < 1f && page.getVisibility() == View.VISIBLE && Dock.playerShown) {
+                long now = SystemClock.uptimeMillis();
+                // Swiping between songs lays the page out nearly every frame: what a layout pass
+                // costs (finding views, walking the chips) runs at most every 300ms.
+                boolean relayout = fullLayoutChanged && now - lastFullLayout >= 300;
+                if (relayout) {
+                    fullLayoutChanged = false;
+                    lastFullLayout = now;
+                }
+                fullGlass.apply(relayout, now);
+                // YouTube Music fades its own song color in over the page while swiping between
+                // songs, over the blurred cover: kept clear while the player is open.
+                if (pageBackground == null || !isInside(pageBackground)) {
+                    pageBackground = pageBackgroundId == 0 ? null : page.findViewById(pageBackgroundId);
+                }
+                if (pageBackground != null && pageBackground.getAlpha() != 0f) pageBackground.setAlpha(0f);
+                // Redrawn when the cover image changes (a new song), fading over from the old one.
+                // A video can't be drawn: the last cover stays behind it.
+                Drawable cover = coverImage();
+                boolean due = cover != null ? cover != lastCover : !background.hasBackdrop() && now - lastBackdrop > 1000;
+                if (due) {
+                    lastCover = cover;
+                    lastBackdrop = now;
+                    background.refreshBackdrop();
+                }
+                if (due || background.fading()) fullGlass.backdropChanged();
+            } else {
+                fullGlass.hide();
+                // Collapsed: YouTube Music's own background back as it was.
+                if (shown >= 1f && pageBackground != null && pageBackground.getAlpha() == 0f) pageBackground.setAlpha(1f);
+            }
             if (shown == 0f) {
                 hideChip();
                 Dock.capsuleShown = false;
@@ -708,6 +767,46 @@ final class MiniPlayerGlass implements ViewTreeObserver.OnPreDrawListener {
         }
     }
 
+    /**
+     * The full player's cover image (YouTube Music's thumbnail), or null (none yet). It may be
+     * hidden: YouTube Music hides it for a moment while swiping between songs.
+     */
+    private Drawable coverImage() {
+        if (thumbnail == null || !isInside(thumbnail)) {
+            thumbnail = thumbnailId == 0 ? null : page.findViewById(thumbnailId);
+        }
+        if (!(thumbnail instanceof android.widget.ImageView)) return null;
+        Drawable d = ((android.widget.ImageView) thumbnail).getDrawable();
+        return d != null && d.getIntrinsicWidth() > 0 && d.getIntrinsicHeight() > 0 ? d : null;
+    }
+
+    private final int sheetId;
+    private View sheet;
+    private final int[] sheetAt = new int[2];
+    private final int[] pageAt = new int[2];
+
+    /** Notes where the queue sheet rests while collapsed. */
+    private void trackSheet() {
+        if (sheet == null || !isInside(sheet)) sheet = sheetId == 0 ? null : page.findViewById(sheetId);
+        if (sheet == null || !sheet.isShown()) return;
+        sheet.getLocationInWindow(sheetAt);
+        page.getLocationInWindow(pageAt);
+        int top = sheetAt[1] - pageAt[1];
+        if (sheetRest == Integer.MAX_VALUE || top > sheetRest) sheetRest = top;
+    }
+
+    /** Whether the queue sheet is pulled up (a little or all the way). */
+    private boolean sheetPulled() {
+        if (sheet == null || !isInside(sheet)) sheet = sheetId == 0 ? null : page.findViewById(sheetId);
+        if (sheet == null || !sheet.isShown() || sheetRest == Integer.MAX_VALUE) return false;
+        sheet.getLocationInWindow(sheetAt);
+        page.getLocationInWindow(pageAt);
+        return sheetRest - (sheetAt[1] - pageAt[1]) > 48 * density;
+    }
+
+    /** The sheet's top while collapsed, in the page's coordinates. */
+    private int sheetRest = Integer.MAX_VALUE;
+
     /** The mini player's alpha with its parents' up to the page: it fades as the player opens. */
     private float visibleAlpha(View view) {
         float alpha = 1f;
@@ -841,9 +940,15 @@ final class MiniPlayerGlass implements ViewTreeObserver.OnPreDrawListener {
         @Override
         public void draw(Canvas canvas) {
             Rect b = getBounds();
-            if (original != null && glassAlpha < 1f) {
-                original.setAlpha(Math.round((1f - glassAlpha) * 255));
-                original.draw(canvas);
+            if (glassAlpha < 1f) {
+                // Under a full blurred cover YouTube Music's background can't be seen: not drawn
+                // (a whole screen less to paint each frame). It may have none (with the queue
+                // sheet up): the blurred cover is drawn all the same.
+                if (original != null && (glassAlpha > 0f || !hasBackdrop())) {
+                    original.setAlpha(Math.round((1f - glassAlpha) * 255));
+                    original.draw(canvas);
+                }
+                drawArtBackdrop(canvas, 1f - glassAlpha);
             }
             if (glassAlpha <= 0f) return;
             int save = glassAlpha >= 1f ? -1
@@ -852,6 +957,147 @@ final class MiniPlayerGlass implements ViewTreeObserver.OnPreDrawListener {
             if (!docked) glass.draw(canvas);
             if (docked) drawRing(canvas);
             if (save >= 0) canvas.restoreToCount(save);
+        }
+
+        // The full player's backdrop: the album cover, blurred across the whole page. It's drawn
+        // small and scaled up, which blurs it cheaply, from the cover image itself (the cover's
+        // view is blank while a new song loads), and only when that image changes. Two of them,
+        // the new one fading in over the old.
+        private final android.graphics.RenderNode[] backdrops = new android.graphics.RenderNode[2];
+        private int current;
+        private long fadeStart = -FADE_MS;
+        private static final long FADE_MS = 450;
+        private boolean backdropDirty = true;
+        private float backdropAlpha;
+
+        /** Records the backdrop again on the next draw, fading over from the old one. */
+        void refreshBackdrop() {
+            backdropDirty = true;
+            invalidateSelf();
+        }
+
+        boolean hasBackdrop() {
+            return backdrops[current] != null && backdrops[current].hasDisplayList();
+        }
+
+        /** Whether the new backdrop is still fading in. */
+        boolean fading() {
+            return SystemClock.uptimeMillis() - fadeStart < FADE_MS;
+        }
+
+        @android.annotation.SuppressLint("NewApi")
+        private void drawArtBackdrop(Canvas canvas, float alpha) {
+            View a = art;
+            if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.S || !canvas.isHardwareAccelerated()
+                    || alpha <= 0f) return;
+            // Recording needs the cover laid out; painting what was recorded doesn't (YouTube Music
+            // lays the cover out again, empty for a few frames, as the queue sheet opens).
+            // The cover image too, when there is one: drawn at no size it left the backdrop empty.
+            boolean canRecord = coverImage() != null
+                    ? thumbnail.getWidth() > 0 && thumbnail.getHeight() > 0
+                    : a != null && a.getWidth() > 0 && a.getHeight() > 0;
+            if (!canRecord && !hasBackdrop()) return;
+            if (backdrops[0] == null) {
+                for (int i = 0; i < 2; i++) {
+                    backdrops[i] = new android.graphics.RenderNode("FullPlayerBackdrop");
+                    backdrops[i].setRenderEffect(android.graphics.RenderEffect.createBlurEffect(
+                            6 * density, 6 * density, android.graphics.Shader.TileMode.CLAMP));
+                }
+            }
+            if (backdropDirty && canRecord) {
+                backdropDirty = false;
+                if (fading()) {
+                    // A second image while fading in (YouTube Music sets a first version, then the
+                    // full one): replaces the one fading in, the fade still starting from the old song.
+                    record(backdrops[current], a);
+                } else {
+                    boolean had = backdrops[current].hasDisplayList();
+                    current ^= 1;
+                    record(backdrops[current], a);
+                    fadeStart = had ? SystemClock.uptimeMillis() : -FADE_MS;
+                }
+            }
+            backdropAlpha = alpha;
+            paintBackdrop(canvas);
+            if (fading()) invalidateSelf();
+        }
+
+        @android.annotation.SuppressLint("NewApi")
+        private void record(android.graphics.RenderNode backdrop, View a) {
+            Rect b = getBounds();
+            int w = Math.max(1, b.width() / 8), h = Math.max(1, b.height() / 8);
+            backdrop.setPosition(0, 0, w, h);
+            android.graphics.RecordingCanvas rc = backdrop.beginRecording(w, h);
+            try {
+                // Opaque whatever the cover holds: the backdrop is all that's behind the player.
+                rc.drawColor(Color.BLACK);
+                // Covering the page, centered, a little larger so the blur has no edges.
+                float side = Math.max(w, h) * 1.25f;
+                rc.save();
+                rc.translate(w / 2f, h / 2f);
+                drawCover(rc, a, side, side);
+                rc.restore();
+                // Darkened, so white text and glass stay legible over light covers (in the small
+                // drawing, not as a layer over the whole screen).
+                rc.drawColor(Color.argb(0x70, 0, 0, 0));
+            } finally {
+                backdrop.endRecording();
+            }
+        }
+
+        /** The cover filling {@code w} x {@code h} centered on the origin, cropped to fit. */
+        private void drawCover(Canvas canvas, View a, float w, float h) {
+            // The image as its view shows it: video thumbnails come with black bars the view crops.
+            View image = coverImage() != null ? thumbnail : null;
+            if (image != null && image.getWidth() > 0 && image.getHeight() > 0) {
+                float s = Math.max(w / image.getWidth(), h / image.getHeight());
+                canvas.scale(s, s);
+                canvas.translate(-image.getWidth() / 2f, -image.getHeight() / 2f);
+                image.draw(canvas);
+                return;
+            }
+            // No image (a video): the cover's view as it is.
+            float s = Math.max(w / a.getWidth(), h / a.getHeight());
+            canvas.scale(s, s);
+            canvas.translate(-a.getWidth() / 2f, -a.getHeight() / 2f);
+            a.draw(canvas);
+        }
+
+        @android.annotation.SuppressLint("NewApi")
+        private void paintBackdrop(Canvas canvas) {
+            android.graphics.RenderNode now = backdrops[current], before = backdrops[current ^ 1];
+            if (now == null || backdropAlpha <= 0f || !now.hasDisplayList()) return;
+            float t = Math.min(1f, (SystemClock.uptimeMillis() - fadeStart) / (float) FADE_MS);
+            Rect b = getBounds();
+            if (t < 1f && before.hasDisplayList()) {
+                before.setAlpha(backdropAlpha);
+                drawScaled(canvas, before, b);
+                now.setAlpha(backdropAlpha * t);
+            } else {
+                now.setAlpha(backdropAlpha);
+            }
+            drawScaled(canvas, now, b);
+        }
+
+        @android.annotation.SuppressLint("NewApi")
+        private void drawScaled(Canvas canvas, android.graphics.RenderNode node, Rect b) {
+            int save = canvas.save();
+            canvas.translate(b.left, b.top);
+            canvas.scale(b.width() / (float) node.getWidth(), b.height() / (float) node.getHeight());
+            canvas.drawRenderNode(node);
+            canvas.restoreToCount(save);
+        }
+
+        /**
+         * What the full player's glass looks through: YouTube Music's background and the blurred
+         * art as last drawn, without recording anything again.
+         */
+        void drawUnder(Canvas canvas) {
+            if (original != null && glassAlpha < 1f && (glassAlpha > 0f || !hasBackdrop())) original.draw(canvas);
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S
+                    && canvas.isHardwareAccelerated()) {
+                paintBackdrop(canvas);
+            }
         }
 
         /** The progress ring around the round thumbnail. */

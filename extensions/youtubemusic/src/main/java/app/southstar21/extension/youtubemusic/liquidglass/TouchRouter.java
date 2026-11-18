@@ -23,6 +23,17 @@ final class TouchRouter implements InvocationHandler {
         boolean dispatch(MotionEvent event);
     }
 
+    /** Sees every touch on the window first, without taking any (the full player's jelly glass). */
+    interface Watcher {
+        void onTouch(MotionEvent event);
+    }
+
+    private static java.lang.ref.WeakReference<Watcher> watcher;
+
+    static void watch(Watcher w) {
+        watcher = new java.lang.ref.WeakReference<>(w);
+    }
+
     private final Window.Callback window;
     private final Dispatch original;
     private final LiquidGlassLens lens;
@@ -72,6 +83,16 @@ final class TouchRouter implements InvocationHandler {
 
     boolean dispatchTouchEvent(MotionEvent event) {
         Interaction.touched();
+        java.lang.ref.WeakReference<Watcher> ref = watcher;
+        Watcher w = ref == null ? null : ref.get();
+        if (w != null && window != null) {
+            try {
+                w.onTouch(event);
+            } catch (Throwable t) {
+                watcher = null;
+                android.util.Log.e(LiquidGlassNavBarPatch.TAG, "Disabling the jelly glass touches", t);
+            }
+        }
         int action = event.getActionMasked();
         if (action == MotionEvent.ACTION_DOWN) {
             tracking = false;
