@@ -50,7 +50,13 @@ Patched apps are signed with a different key, so uninstall the Play Store versio
 
 Spotify checks the app when you log in: a patched Spotify logs in on a regular phone, but is refused on emulators and other devices that fail Google's integrity check.
 
-A patched YouTube Music can't sign in to Google on its own. Patch it together with Morphe's own YouTube Music patches (they're in Morphe Manager by default), whose **GmsCore support** lets it sign in through [MicroG-RE](https://github.com/MorpheApp/MicroG-RE), and install MicroG-RE first.
+YouTube Music needs Morphe Patches too, which Morphe Manager ships with: a patched YouTube Music can only sign in to Google through their **GmsCore support** and [MicroG-RE](https://github.com/MorpheApp/MicroG-RE).
+
+1. In Morphe Manager, turn on **Expert mode** (Settings, Patching). In the default Simple mode only one source is used per app.
+2. Patch YouTube Music and keep both sources ticked: **GmsCore support** from Morphe Patches, and the patches from this repo.
+3. Open the patched app. If MicroG-RE isn't installed yet, it asks you to install it.
+
+Patching YouTube Music without GmsCore support stops with a message saying so, rather than giving you an app that can't sign in.
 
 > [!WARNING]
 > The terms of Instagram, Spotify and YouTube Music don't allow modified clients. Use these patches at your own risk.
