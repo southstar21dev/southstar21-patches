@@ -1,3 +1,9 @@
+## [1.3.0-dev.5](https://github.com/southstar21dev/southstar21-patches/compare/v1.3.0-dev.4...v1.3.0-dev.5) (2026-11-18)
+
+### ✨ New Features
+
+* **YouTube Music:** Stop the build without Morphe's GmsCore support ([94421de](https://github.com/southstar21dev/southstar21-patches/commit/94421defad0d9baf9ff1d420152765fad28583c6))
+
 ## [1.3.0-dev.4](https://github.com/southstar21dev/southstar21-patches/compare/v1.3.0-dev.3...v1.3.0-dev.4) (2026-11-18)
 
 ### ✨ New Features

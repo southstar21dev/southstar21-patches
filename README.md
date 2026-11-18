@@ -64,7 +64,7 @@ Patching YouTube Music without GmsCore support stops with a message saying so, r
 ## Patches
 
 <!-- PATCHES_START EXPANDED -->
-> **[v1.3.0-dev.4](https://github.com/southstar21dev/southstar21-patches/releases/tag/v1.3.0-dev.4)**&nbsp;&nbsp;•&nbsp;&nbsp;`dev`&nbsp;&nbsp;•&nbsp;&nbsp;10 patches total
+> **[v1.3.0-dev.5](https://github.com/southstar21dev/southstar21-patches/releases/tag/v1.3.0-dev.5)**&nbsp;&nbsp;•&nbsp;&nbsp;`dev`&nbsp;&nbsp;•&nbsp;&nbsp;10 patches total
 <details open>
 <summary>📦 Instagram&nbsp;&nbsp;•&nbsp;&nbsp;8 patches</summary>
 <br>
@@ -113,7 +113,7 @@ Patching YouTube Music without GmsCore support stops with a message saying so, r
 
 | 💊&nbsp;Patch | 📜&nbsp;Description | ⚙️&nbsp;Options |
 |----------|----------------|-----------|
-| [Liquid Glass navigation bar](#liquid-glass-navigation-bar-youtube-music) | Turns the bottom tab bar and the mini player above it into floating iOS 26 style Liquid Glass with live background blur and edge refraction, with the content scrolling on behind them. Refraction needs Android 13+, blur needs Android 12+, older versions get a tinted pill. | • Blur radius<br>• Refraction strength<br>• southstar21 style |
+| [Liquid Glass navigation bar](#liquid-glass-navigation-bar-youtube-music) | Turns the bottom tab bar and the mini player above it into floating iOS 26 style Liquid Glass with live background blur and edge refraction, with the content scrolling on behind them. Refraction needs Android 13+, blur needs Android 12+, older versions get a tinted pill. Requires Morphe Patches with GmsCore support, applied together in Expert mode. | • Blur radius<br>• Refraction strength<br>• southstar21 style |
 
 </details>
 
