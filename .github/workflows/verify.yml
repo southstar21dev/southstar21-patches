@@ -26,16 +26,21 @@ permissions:
   packages: read
 
 env:
-  # Morphe CLI v2.1.1 runs morphe-patcher 2.3.0, the patcher in Morphe Manager 2.5.0.
+  # Morphe CLI v2.2.0 runs morphe-patcher 2.4.0, the patcher in Morphe Manager 2.6.0.
   # Keep this in step with the patcher Morphe Manager ships.
-  MORPHE_CLI_VERSION: v2.1.1
+  MORPHE_CLI_VERSION: v2.2.0
   TEST_APKS_REPO: ${{ vars.TEST_APKS_REPO || 'southstar21dev/test-apks' }}
-  # Each app: <folder under patches/.../patches/>:<package name>:<display name, _ for spaces>. Its supported
-  # versions are read from that folder's shared/Constants.kt.
+  # Morphe Patches, for apps whose patches only build together with some of them (see APPS).
+  # Pinned, so a Morphe release can't break ours unnoticed; it needs the patcher above.
+  MORPHE_PATCHES_VERSION: v2.3.0
+  # Each app: <folder under patches/.../patches/>:<package name>:<display name>[:<Morphe Patches>],
+  # with _ for spaces. Its supported versions are read from that folder's shared/Constants.kt.
+  # The optional last part lists Morphe Patches (comma separated) applied along with ours, for
+  # apps whose patches stop the build without them: YouTube Music needs GmsCore support.
   APPS: >-
     instagram:com.instagram.android:Instagram
     spotify:com.spotify.music:Spotify
-    youtubemusic:com.google.android.apps.youtube.music:YouTube_Music
+    youtubemusic:com.google.android.apps.youtube.music:YouTube_Music:GmsCore_support
 
 jobs:
   verify:
@@ -98,6 +103,14 @@ jobs:
           gh release download "$MORPHE_CLI_VERSION" -R MorpheApp/morphe-cli -p '*-all.jar' -D "$RUNNER_TEMP/cli"
           mv "$RUNNER_TEMP"/cli/*-all.jar "$RUNNER_TEMP/morphe-cli.jar"
 
+      - name: Download Morphe Patches
+        if: steps.apks.outputs.available == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release download "$MORPHE_PATCHES_VERSION" -R MorpheApp/morphe-patches -p 'patches-*.mpp' -D "$RUNNER_TEMP/morphe"
+          mv "$RUNNER_TEMP"/morphe/patches-*.mpp "$RUNNER_TEMP/morphe-patches.mpp"
+
       - name: Download supported APKMs
         if: steps.apks.outputs.available == 'true'
         env:
@@ -137,7 +150,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
           for app in $APPS; do
-            IFS=: read -r folder package label <<< "$app"
+            IFS=: read -r folder package label morphe <<< "$app"
             label=${label//_/ }
             # This app's patches, every one switched on, including ones that are off by default.
             # (Two apps can have a patch of the same name; the CLI only applies the one made for
@@ -146,6 +159,12 @@ jobs:
               '[.patches[] | select(any(.compatiblePackages[]; .packageName == $p)) | .name] | unique | .[]' patches-list.json)
             enable=()
             while IFS= read -r name; do [ -n "$name" ] && enable+=(-e "$name"); done <<< "$names"
+            # Plus only the named Morphe Patches, for apps that need them.
+            if [ -n "$morphe" ]; then
+              enable+=(-p "$RUNNER_TEMP/morphe-patches.mpp" --exclusive)
+              IFS=, read -ra extra <<< "${morphe//_/ }"
+              for name in "${extra[@]}"; do enable+=(-e "$name"); done
+            fi
             expected=$(printf '%s\n' "$names" | jq -R . | jq -s 'map(select(length > 0))')
             total=$(echo "$expected" | jq 'length')
 
