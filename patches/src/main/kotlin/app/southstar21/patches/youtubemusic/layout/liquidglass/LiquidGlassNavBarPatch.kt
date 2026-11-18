@@ -12,8 +12,8 @@ import app.southstar21.patches.youtubemusic.misc.extension.requireGmsCoreSupport
 import app.southstar21.patches.youtubemusic.misc.extension.youTubeMusicSharedExtensionPatch
 import app.southstar21.patches.youtubemusic.shared.Constants.COMPATIBILITY_YOUTUBE_MUSIC
 import com.android.tools.smali.dexlib2.Opcode
-import com.android.tools.smali.dexlib2.iface.instruction.ReferenceInstruction
 import com.android.tools.smali.dexlib2.iface.instruction.FiveRegisterInstruction
+import com.android.tools.smali.dexlib2.iface.instruction.ReferenceInstruction
 import com.android.tools.smali.dexlib2.iface.instruction.ThreeRegisterInstruction
 import com.android.tools.smali.dexlib2.iface.instruction.TwoRegisterInstruction
 import com.android.tools.smali.dexlib2.iface.reference.MethodReference
