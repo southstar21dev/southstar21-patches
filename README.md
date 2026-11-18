@@ -12,12 +12,12 @@
   <sub>The Liquid Glass bar in its iOS style (left) and southstar21 style (right), recorded in the settings' live preview.</sub>
 </p>
 
-<h3 align="center">Patches for Instagram and Spotify, made with Morphe.</h3>
+<h3 align="center">Patches for Instagram, Spotify and YouTube Music, made with Morphe.</h3>
 
 <p align="center">
   A Liquid Glass tab bar from iOS 26, Reels gone from your feed, a daily time budget for scrolling,<br>
   full size profile pictures and a settings menu inside the app to switch each one on and off.<br>
-  On Spotify, the same glass for the tab bar and the mini player.
+  On Spotify and YouTube Music, the same glass for the tab bar and the mini player.
 </p>
 
 <p align="center">
@@ -34,6 +34,7 @@
   <a href="https://github.com/southstar21dev/southstar21-patches/actions/workflows/release.yml"><img alt="Release" src="https://img.shields.io/github/actions/workflow/status/southstar21dev/southstar21-patches/release.yml?branch=main&label=build&style=flat-square"></a>
   <img alt="Instagram 454.0.0.54.77" src="https://img.shields.io/badge/Instagram-454.0.0.54.77-1F1A17?style=flat-square&logo=instagram&logoColor=F5ECD7">
   <img alt="Spotify 9.2.0.2053" src="https://img.shields.io/badge/Spotify-9.2.0.2053-1F1A17?style=flat-square&logo=spotify&logoColor=F5ECD7">
+  <img alt="YouTube Music 9.46.51" src="https://img.shields.io/badge/YouTube%20Music-9.46.51-1F1A17?style=flat-square&logo=youtubemusic&logoColor=F5ECD7">
   <a href="https://morphe.software"><img alt="Morphe" src="https://img.shields.io/badge/Morphe-patches-1F1A17?style=flat-square"></a>
   <a href="LICENSE"><img alt="License GPL-3.0" src="https://img.shields.io/badge/license-GPL--3.0-1F1A17?style=flat-square"></a>
 </p>
@@ -42,15 +43,17 @@
 
 1. Install [Morphe Manager](https://morphe.software) on your phone.
 2. Add this repo as a patch source: **[add southstar21 Patches to Morphe](https://morphe.software/add-source?github=southstar21dev/southstar21-patches)**. Or download `patches-x.y.z.mpp` from [Releases](https://github.com/southstar21dev/southstar21-patches/releases) and add it as a local file.
-3. Download the Instagram or Spotify **APKM** bundle from APKMirror, in a version listed under [Patches](#patches).
+3. Download the Instagram, Spotify or YouTube Music **APKM** bundle from APKMirror, in a version listed under [Patches](#patches).
 4. Patch it in Morphe Manager, choose the patches you want and install the result.
 
 Patched apps are signed with a different key, so uninstall the Play Store version first.
 
 Spotify checks the app when you log in: a patched Spotify logs in on a regular phone, but is refused on emulators and other devices that fail Google's integrity check.
 
+A patched YouTube Music can't sign in to Google on its own. Patch it together with Morphe's own YouTube Music patches (they're in Morphe Manager by default), whose **GmsCore support** lets it sign in through [MicroG-RE](https://github.com/MorpheApp/MicroG-RE), and install MicroG-RE first.
+
 > [!WARNING]
-> Instagram's and Spotify's terms don't allow modified clients. Use these patches at your own risk.
+> The terms of Instagram, Spotify and YouTube Music don't allow modified clients. Use these patches at your own risk.
 
 ## Patches
 
@@ -242,6 +245,24 @@ Spotify has no settings menu yet, so the look comes from the patch options in Mo
 <summary>How it works</summary>
 
 A hook in `SpotifyMainActivity.onWindowFocusChanged` (unobfuscated) starts the extension, which finds the tab bar and the mini player by their resource names and gives them the glass background used for Instagram. Spotify draws all its tabs in one Compose view, so the selection follows stand-in views laid over each tab, and the selected tab is read from which label Spotify draws white. A small shader on the tab bar turns that white into Spotify green.
+
+</details>
+
+### Liquid Glass navigation bar (YouTube Music)
+
+YouTube Music's bottom tab bar and the mini player above it as Liquid Glass, with the same glass as on Spotify.
+
+- **Floating glass tab bar.** A clear glass capsule, 8 dp from the screen edges, with live blur and a strongly refracting rim. Pressing a tab no longer shows Android's ripple: the glass is the feedback.
+- **Glass mini player.** The mini player becomes a matching glass capsule with round album art. Opening the full player fades the glass out and brings YouTube Music's own background and artwork corners back.
+- **Content behind the glass.** Pages scroll on behind the bar and the mini player instead of stopping above them.
+- **Gliding selection.** Press the selected tab and it swells into a drop of clear glass you can drag between tabs; let go to open the tab underneath.
+
+Like on Spotify, the look comes from the patch options in Morphe Manager (blur radius, refraction strength, southstar21 style). Android 13+ gets the full effect, Android 12 gets blur without refraction, and older versions get a translucent tinted pill.
+
+<details>
+<summary>How it works</summary>
+
+A hook in `MusicActivity.onWindowFocusChanged` (unobfuscated) starts the extension. The tab bar is a Material `TabLayout` (`pivot_bar`); its tab strip's padding shapes the capsule, so the bar's own padding, which YouTube Music keeps resetting, is never touched. `WatchWhileLayout` measures the bar and places the mini player above it, and a second hook in its `onMeasure` gives the content the full height so it runs on behind the glass. The mini player is the top of the player page, whose background is wrapped so it shows the glass while the player is collapsed.
 
 </details>
 
