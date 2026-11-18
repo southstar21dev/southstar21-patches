@@ -156,6 +156,8 @@ final class JellyGlass extends Drawable {
         final int id;
         /** The drop's size at rest, px: a circle when equal. */
         float w, h;
+        /** The size it's drawn at: as given, but no larger than its view or the row. */
+        float drawnW, drawnH;
         /** Sized from its view, rather than given. */
         final boolean fit;
         final float fill;
@@ -265,7 +267,7 @@ final class JellyGlass extends Drawable {
         for (Drop d : drops) {
             View v = d.view;
             boolean present = v != null && v.getVisibility() == View.VISIBLE && v.getAlpha() > 0.05f
-                    && v.getWidth() > 0 && isInside(v);
+                    && v.getWidth() > 0 && v.getHeight() > 0 && isInside(v);
             // YouTube Music's own disc (the play button's white one) and ripples: the drop is the button now.
             if (present && v != container && v.getBackground() != null) v.setBackground(null);
             // Its own press animation would fight the jelly over the view's scale.
@@ -290,6 +292,20 @@ final class JellyGlass extends Drawable {
                 d.h = v.getHeight();
                 changed = true;
             }
+            // Never larger than its button, nor than the row (which clips it): right after launch
+            // a button can be measured before its final size.
+            float limit = container.getHeight() - 2 * density;
+            float dw = present ? Math.min(d.w, Math.min(v.getWidth(), limit)) : 0f;
+            float dh = present ? Math.min(d.h, Math.min(v.getHeight(), limit)) : 0f;
+            if (d.fit) {
+                dw = present ? v.getWidth() : 0f;
+                dh = present ? v.getHeight() : 0f;
+            }
+            if (dw != d.drawnW || dh != d.drawnH) {
+                d.drawnW = dw;
+                d.drawnH = dh;
+                changed = true;
+            }
             if (present != d.present || cx != d.cx || cy != d.cy) {
                 d.present = present;
                 d.cx = cx;
@@ -303,6 +319,11 @@ final class JellyGlass extends Drawable {
         // A press that opened a dialog (cast) never sees its finger lift, which goes to the
         // dialog: let go once the window loses focus, or the drop stays swollen (and clipped).
         if (pressed != null && !container.hasWindowFocus()) release();
+        // The row sliding into place (the player opening) doesn't redraw it: the backdrop it
+        // shows has to be drawn again for where it is now.
+        if (!changed && !Float.isNaN(drawnX) && locate(container) && (offX != drawnX || offY != drawnY)) {
+            changed = true;
+        }
         if (step() || changed) invalidateSelf();
     }
 
@@ -320,6 +341,7 @@ final class JellyGlass extends Drawable {
      */
     private boolean dirty = true;
     private int drawnW, drawnH;
+    private float drawnX = Float.NaN, drawnY = Float.NaN;
 
     @Override
     public void invalidateSelf() {
@@ -374,6 +396,23 @@ final class JellyGlass extends Drawable {
                 return;
             default:
         }
+    }
+
+    private float offX, offY;
+
+    /** The container's place on the page, into {@link #offX}, {@link #offY}; false if it's not on it. */
+    private boolean locate(View c) {
+        float ox = 0f, oy = 0f;
+        for (View v = c; v != page; ) {
+            ox += v.getLeft() + v.getTranslationX();
+            oy += v.getTop() + v.getTranslationY();
+            ViewParent p = v.getParent();
+            if (!(p instanceof View)) return false;
+            v = (View) p;
+        }
+        offX = ox;
+        offY = oy;
+        return true;
     }
 
     /** Lets go of any press. */
@@ -471,7 +510,7 @@ final class JellyGlass extends Drawable {
             for (int i = 0; i < drops.length; i++) {
                 Drop d = drops[i];
                 if (!d.present) continue;
-                float x = d.cx + d.tx, y = d.cy + d.ty, rx = d.w / 2f * d.sx, ry = d.h / 2f * d.sy;
+                float x = d.cx + d.tx, y = d.cy + d.ty, rx = d.drawnW / 2f * d.sx, ry = d.drawnH / 2f * d.sy;
                 fallback[i].setBounds(Math.round(x - rx), Math.round(y - ry), Math.round(x + rx), Math.round(y + ry));
                 fallback[i].draw(canvas);
             }
@@ -483,7 +522,13 @@ final class JellyGlass extends Drawable {
         float strength = 12 * density;
         int pad = (int) Math.ceil(strength * 1.1f) + 2;
         int w = c.getWidth() + 2 * pad, h = c.getHeight() + 2 * pad;
-        if (!dirty && node != null && node.hasDisplayList() && drawnW == w && drawnH == h) {
+        // The container's place on the page.
+        if (!locate(c)) return;
+        float ox = offX, oy = offY;
+        // Drawn again if the row moved on the page since: recorded mid-animation (the player
+        // opening), the backdrop came out shifted and left the buttons' tops uncovered.
+        if (!dirty && node != null && node.hasDisplayList() && drawnW == w && drawnH == h
+                && ox == drawnX && oy == drawnY) {
             int save = canvas.save();
             canvas.translate(-pad, -pad);
             canvas.drawRenderNode(node);
@@ -493,15 +538,8 @@ final class JellyGlass extends Drawable {
         dirty = false;
         drawnW = w;
         drawnH = h;
-        // The container's place on the page.
-        float ox = 0f, oy = 0f;
-        for (View v = c; v != page; ) {
-            ox += v.getLeft() + v.getTranslationX();
-            oy += v.getTop() + v.getTranslationY();
-            ViewParent p = v.getParent();
-            if (!(p instanceof View)) return;
-            v = (View) p;
-        }
+        drawnX = ox;
+        drawnY = oy;
         if (node == null) {
             node = new RenderNode("JellyGlass");
             shader = new RuntimeShader(SHADER);
@@ -521,12 +559,12 @@ final class JellyGlass extends Drawable {
             boolean self = d != null && d.view == c;
             uniform[0] = d == null ? 0f : d.cx + (self ? 0f : d.tx);
             uniform[1] = d == null ? 0f : d.cy + (self ? 0f : d.ty);
-            uniform[2] = d == null ? 0f : d.w / 2f;
+            uniform[2] = d == null ? 0f : d.drawnW / 2f;
             uniform[3] = d == null ? 0f : Math.max(0f, Math.min(1f, d.press.value));
             shader.setFloatUniform("s" + i, uniform);
             uniform[0] = d == null || self ? 1f : d.sx;
             uniform[1] = d == null || self ? 1f : d.sy;
-            uniform[2] = d == null ? 0f : d.h / 2f;
+            uniform[2] = d == null ? 0f : d.drawnH / 2f;
             uniform[3] = d == null ? 0f : d.fill;
             shader.setFloatUniform("t" + i, uniform);
         }

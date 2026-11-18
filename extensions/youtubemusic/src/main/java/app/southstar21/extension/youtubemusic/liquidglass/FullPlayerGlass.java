@@ -40,14 +40,13 @@ final class FullPlayerGlass implements TouchRouter.Watcher {
     /** The action bar's chips, and the hosts that have a sheen. */
     private final ArrayList<View> chips = new ArrayList<>();
     private final ArrayList<View> sheened = new ArrayList<>();
+    private final java.util.HashMap<View, Glass> sheens = new java.util.HashMap<>();
     private final int[] location = new int[2];
     private final JellyGlass topRow, controlsRow, switchGlass;
     private final SwitchThumb thumb;
     private final int songIconId, videoIconId;
     /** Found views, looked up again after a layout pass (each lookup walks the page). */
     private View top, controls, toggle, sheet, bar;
-    /** When the chips were last looked for (uptime ms): a walk through the Litho tree. */
-    private long lastChipScan;
     private boolean active;
     private long lastFind;
 
@@ -145,9 +144,7 @@ final class FullPlayerGlass implements TouchRouter.Watcher {
             hideOwnThumb(toggle);
         }
         sheet(sheet);
-        boolean rescan = now - lastChipScan > (relayout ? 300 : 1000);
-        if (rescan) lastChipScan = now;
-        chips(bar, rescan);
+        chips(bar);
     }
 
     /** YouTube Music's own thumb, made clear, and the switch it belongs to. */
@@ -230,23 +227,39 @@ final class FullPlayerGlass implements TouchRouter.Watcher {
 
     /**
      * YouTube Music draws its chips itself (Litho), with no view background to replace: the
-     * sheen is each chip host's foreground, so it moves, scrolls and shrinks on press with the
-     * chip in the same frame. (Drawn over the row, following the chips, it lagged a frame
-     * behind: a loose outline while scrolling or pressing.) Litho reuses hosts, so a host that
-     * is no longer a chip gets its foreground back.
+     * sheen is in each chip host's own overlay, so it moves, scrolls and shrinks on press with
+     * the chip in the same frame (drawn over the row, following the chips, it lagged a frame:
+     * a loose outline). Litho reuses hosts as the row scrolls, so the chips are checked every
+     * frame (a handful of views): a host that's no longer a chip loses its sheen at once, and
+     * a new one gets it at once, with no flashing.
      */
-    private void chips(View bar, boolean rescan) {
-        if (!(bar instanceof ViewGroup) || bar.getWidth() == 0 || !rescan) return;
+    private void chips(View bar) {
+        if (!(bar instanceof ViewGroup) || bar.getWidth() == 0) return;
         chips.clear();
         findChips((ViewGroup) bar, 0);
+        for (int i = sheened.size() - 1; i >= 0; i--) {
+            View old = sheened.get(i);
+            if (!chips.contains(old)) {
+                Glass g = sheens.remove(old);
+                if (g != null) old.getOverlay().remove(g);
+                sheened.remove(i);
+            }
+        }
         for (View chip : chips) {
-            if (!(chip.getForeground() instanceof Glass)) chip.setForeground(new Glass(Glass.CAPSULE, 0, 0));
+            Glass g = sheens.get(chip);
+            if (g == null) {
+                g = new Glass(Glass.CAPSULE, 0, 0);
+                sheens.put(chip, g);
+                sheened.add(chip);
+                chip.getOverlay().add(g);
+            }
+            Rect b = g.getBounds();
+            if (b.width() != chip.getWidth() || b.height() != chip.getHeight()) {
+                g.setBounds(0, 0, chip.getWidth(), chip.getHeight());
+            }
+            // Earlier versions put it in the foreground.
+            if (chip.getForeground() instanceof Glass) chip.setForeground(null);
         }
-        for (View old : sheened) {
-            if (!chips.contains(old) && old.getForeground() instanceof Glass) old.setForeground(null);
-        }
-        sheened.clear();
-        sheened.addAll(chips);
     }
 
     /** A chip: a component host inside another, pill sized (30 to 48dp tall). */
