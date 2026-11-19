@@ -1,3 +1,9 @@
+## [1.3.0-dev.9](https://github.com/southstar21dev/southstar21-patches/compare/v1.3.0-dev.8...v1.3.0-dev.9) (2026-11-19)
+
+### ✨ New Features
+
+* **Liquid Glass navigation bar:** Glass share menu, glass header buttons and tilt light ([37542c8](https://github.com/southstar21dev/southstar21-patches/commit/37542c8d234e6e357aa4a3d46c7629ebf348c40f))
+
 ## [1.3.0-dev.8](https://github.com/southstar21dev/southstar21-patches/compare/v1.3.0-dev.7...v1.3.0-dev.8) (2026-11-18)
 
 ### 🐛 Bug Fixes
