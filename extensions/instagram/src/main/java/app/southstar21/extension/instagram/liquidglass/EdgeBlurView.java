@@ -42,9 +42,14 @@ final class EdgeBlurView extends View {
      * faded in a little further up, so the blur builds up smoothly instead of a single blurred
      * copy fading over sharp content (which shows both at once where it ends).
      */
-    private static final float[] TOP_RADII_DP = {3f, 8f, 16f};
+    private static final float[] TOP_RADII_DP = {1.5f, 4f, 9f, 16f};
     /** Where each level fades in, as fractions of the tail below the header (0 = its open end). */
-    private static final float[][] TOP_RAMPS = {{0f, 0.45f}, {0.2f, 0.75f}, {0.5f, 1f}};
+    private static final float[][] TOP_RAMPS = {{0f, 0.4f}, {0.15f, 0.6f}, {0.35f, 0.85f}, {0.55f, 1f}};
+    /**
+     * Room recorded past the tail's open end, so the blurs there average real content instead of
+     * the recording's clamped last row (which smeared into a visible line where the blur ends).
+     */
+    private static final float TOP_PAD_DP = 32f;
     private RenderNode[] levels;
     private Paint[] levelMasks;
     private int maskHeight = -1;
@@ -58,8 +63,8 @@ final class EdgeBlurView extends View {
     EdgeBlurView(Context context, float density, boolean atTop) {
         super(context);
         this.atTop = atTop;
-        // The top fades out over a longer tail: there's no glass bar covering its start.
-        this.extraTop = Math.round((atTop ? 72 : 36) * density);
+        // The top ends just below the camera, fading out over a short tail.
+        this.extraTop = Math.round((atTop ? 28 : 36) * density);
         this.density = density;
         this.blurRadiusPx = Math.round(16 * density);
         setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
@@ -145,8 +150,10 @@ final class EdgeBlurView extends View {
 
         float originX = getLeft() + getTranslationX();
         float originY = getTop() + getTranslationY();
-        backdrop.setPosition(0, 0, w, h);
-        RecordingCanvas rc = backdrop.beginRecording(w, h);
+        // The top variant records a little further down than it draws (see TOP_PAD_DP).
+        int rh = atTop ? h + Math.round(TOP_PAD_DP * density) : h;
+        backdrop.setPosition(0, 0, w, rh);
+        RecordingCanvas rc = backdrop.beginRecording(w, rh);
         try {
             rc.translate(-originX, -originY);
             for (int i = 0; i < index; i++) {
@@ -170,7 +177,7 @@ final class EdgeBlurView extends View {
             backdrop.endRecording();
         }
         if (atTop) {
-            drawLevels(canvas, w, h);
+            drawLevels(canvas, w, h, rh);
             return;
         }
         backdrop.setRenderEffect(blur);
@@ -183,7 +190,7 @@ final class EdgeBlurView extends View {
     }
 
     /** Light to strong: each level covers the one before it where it has fully faded in. */
-    private void drawLevels(Canvas canvas, int w, int h) {
+    private void drawLevels(Canvas canvas, int w, int h, int rh) {
         if (levels == null) {
             levels = new RenderNode[TOP_RADII_DP.length];
             for (int i = 0; i < levels.length; i++) {
@@ -194,8 +201,8 @@ final class EdgeBlurView extends View {
         }
         for (int i = 0; i < levels.length; i++) {
             RenderNode level = levels[i];
-            level.setPosition(0, 0, w, h);
-            RecordingCanvas rc = level.beginRecording(w, h);
+            level.setPosition(0, 0, w, rh);
+            RecordingCanvas rc = level.beginRecording(w, rh);
             try {
                 rc.drawRenderNode(backdrop);
             } finally {
@@ -257,7 +264,7 @@ final class EdgeBlurView extends View {
         fadePaint.setShader(new LinearGradient(0, from, 0, to, colors, stops, Shader.TileMode.CLAMP));
     }
 
-    private static final int EASE_STOPS = 9;
+    private static final int EASE_STOPS = 13;
 
     /** {@code color} at alpha {@code a0} before {@code start}, easing to {@code a1} at {@code end}. */
     private static LinearGradient easedGradient(float from, float to, float start, float end,
@@ -276,8 +283,9 @@ final class EdgeBlurView extends View {
         return new LinearGradient(0, from, 0, to, colors, stops, Shader.TileMode.CLAMP);
     }
 
+    /** Smootherstep: flat at both ends, so a level eases in with no visible start or end. */
     private static float smoothstep(float t) {
-        return t * t * (3f - 2f * t);
+        return t * t * t * (t * (t * 6f - 15f) + 10f);
     }
 
     private static int withAlpha(int color, int alpha) {

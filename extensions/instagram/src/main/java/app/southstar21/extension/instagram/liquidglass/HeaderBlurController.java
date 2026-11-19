@@ -1,6 +1,7 @@
 package app.southstar21.extension.instagram.liquidglass;
 
 import android.content.res.Resources;
+import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Rect;
 import android.graphics.RectF;
@@ -39,10 +40,8 @@ final class HeaderBlurController {
     private static final long SCAN_INTERVAL_MS = 500;
     /** After a full screen page closes, look for the header every frame for this long. */
     private static final long EAGER_SCAN_MS = 600;
-    /** Scrolling faster than this (dp per ms) shows the glass circles, like iOS. */
-    private static final float FAST_SCROLL_DP_PER_MS = 1.2f;
-    /** How long the circles stay after the scrolling slows down, and how long they fade. */
-    private static final long REVEAL_HOLD_MS = 350, FADE_IN_MS = 150, FADE_OUT_MS = 300;
+    /** How far from the top of the feed the circles fade in. */
+    private static final float REVEAL_RANGE_DP = 32f;
     /** How far the glass circles stay from the screen's sides. */
     private static final int EDGE_MARGIN_DP = 10;
     /** Bounded walk when looking for a header's list. */
@@ -84,14 +83,15 @@ final class HeaderBlurController {
         /** The icon buttons wearing glass circles, found again now and then. */
         final ArrayList<View> buttons = new ArrayList<>();
         final ArrayList<GlassButtonDrawable> glass = new ArrayList<>();
+        final HeaderGlass group;
+        /** The color behind the content, for the glass' backdrop. */
+        int base;
+        long stepAt;
         long buttonsFoundAt;
         /** Scroll speed tracking: a list item and where it was last frame. */
-        WeakReference<View> speedAnchor;
-        int speedAnchorTop;
-        long speedAt, lastFastAt;
         float reveal;
 
-        Header(View header, View wrapper, FrameLayout page, EdgeBlurView blur, int dividerId) {
+        Header(View header, View wrapper, FrameLayout page, EdgeBlurView blur, int dividerId, float density) {
             this.header = header;
             this.divider = dividerId == 0 ? null : wrapper.findViewById(dividerId);
             this.wrapper = wrapper;
@@ -100,6 +100,24 @@ final class HeaderBlurController {
             // Videos the blur can't record are found among the siblings below the header.
             this.snapshots = new SurfaceSnapshots(wrapper);
             blur.setSnapshots(snapshots);
+            this.group = new HeaderGlass(density, this::drawBackdrop, glass);
+        }
+
+        /** What the glass circles refract: the page below the blur, in page coordinates. */
+        void drawBackdrop(Canvas rc) {
+            int index = page.indexOfChild(blur);
+            for (int i = 0; i < index; i++) {
+                View child = page.getChildAt(i);
+                if (child.getVisibility() != View.VISIBLE || child.getAlpha() == 0f) continue;
+                if (child instanceof EdgeBlurView) continue;
+                int save = rc.save();
+                rc.translate(child.getLeft() + child.getTranslationX(), child.getTop() + child.getTranslationY());
+                child.draw(rc);
+                rc.restoreToCount(save);
+            }
+            // Videos are holes in the recording: copies where those work, then the base color.
+            snapshots.draw(rc);
+            snapshots.drawBase(rc, base);
         }
     }
 
@@ -271,7 +289,7 @@ final class HeaderBlurController {
         page.addView(blur, page.indexOfChild(wrapper), new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 1, Gravity.TOP));
         relaidOut = true;
-        headers.put(header, new Header(header, wrapper, page, blur, dividerId));
+        headers.put(header, new Header(header, wrapper, page, blur, dividerId, density));
     }
 
     private void enforce(Header h, boolean dark) {
@@ -306,9 +324,9 @@ final class HeaderBlurController {
             unclipAbove(scroller, h.page);
         }
 
-        // The blur runs from the top of the screen to past the header's bottom edge.
-        int headerBottom = wrapper.getTop() + wrapper.getHeight();
-        int height = inset + headerBottom + h.blur.extraTop;
+        // The blur covers the status bar and the camera cutout, and fades out just below them.
+        // The header row sits over the content itself (its buttons have their glass circles).
+        int height = inset + cameraBottom(h.page) + h.blur.extraTop;
         FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) h.blur.getLayoutParams();
         if ((wrapper.getHeight() > 0 && lp.height != height) || lp.topMargin != -inset) {
             if (wrapper.getHeight() > 0) lp.height = height;
@@ -318,13 +336,7 @@ final class HeaderBlurController {
             relaidOut = true;
         }
 
-        // Follow the header when Instagram slides it away while scrolling. The status bar part
-        // stays frosted, like on iOS.
-        float slid = visibleBottom(h) - headerBottom;
-        float ty = Math.max(-headerBottom, Math.min(0f, slid));
-        // The blur stays put and its band shrinks with the header, so the strongest blur always
-        // covers the status bar and whatever is left of the header.
-        h.blur.setExtent(Math.round(height + ty));
+        h.blur.setExtent(-1);
         if (h.blur.getTranslationY() != 0f) h.blur.setTranslationY(0f);
         clipHeader(h, inset);
 
@@ -340,7 +352,7 @@ final class HeaderBlurController {
         if (!shown) return;
         h.blur.setDark(dark);
         h.blur.setBackgroundColorBehind(colorBehind(h.page, dark));
-        h.snapshotRegion.set(0, -inset, h.page.getWidth(), -inset + height + ty);
+        h.snapshotRegion.set(0, -inset, h.page.getWidth(), -inset + height);
         h.snapshots.update(h.snapshotRegion);
         h.blur.invalidate();
     }
@@ -375,6 +387,17 @@ final class HeaderBlurController {
             if (button.getTranslationX() != shift) button.setTranslationX(shift);
         }
         float reveal = updateReveal(h, now);
+        boolean live = reveal > 0.01f;
+        if (live) {
+            // Nothing is recorded for the glass while it is hidden.
+            int bg = colorBehind(h.page, dark);
+            h.base = Color.alpha(bg) == 0xFF ? bg : dark ? Color.BLACK : Color.WHITE;
+            h.group.beginFrame(h.page.getWidth(),
+                    Math.min(h.page.getHeight(), h.wrapper.getTop() + h.wrapper.getHeight() + Math.round(24 * density)));
+        }
+        long nanos = System.nanoTime();
+        float dt = h.stepAt == 0 ? 0f : Math.min(1f / 30f, (nanos - h.stepAt) / 1e9f);
+        boolean moving = false;
         for (int i = 0; i < h.buttons.size(); i++) {
             View button = h.buttons.get(i);
             GlassButtonDrawable glass = h.glass.get(i);
@@ -382,6 +405,24 @@ final class HeaderBlurController {
             glass.setReveal(reveal);
             glass.setDiameter(diameter);
             if (button.getBackground() != glass) setBackgroundKeepingPadding(button, glass);
+            // Where the circle's center is on the page, for the shared backdrop and bridging.
+            float px = button.getWidth() / 2f, py = button.getHeight() / 2f;
+            for (View v = button; v != h.page; ) {
+                px += v.getLeft() + v.getTranslationX();
+                py += v.getTop() + v.getTranslationY();
+                ViewParent parent = v.getParent();
+                if (!(parent instanceof View)) break;
+                v = (View) parent;
+            }
+            glass.setPlacement(px, py);
+            // A press swells the circle and, with it, the icon: the button view is scaled.
+            moving |= glass.step(dt);
+            float scale = glass.scaleValue();
+            if (scale != glass.appliedScale) {
+                glass.appliedScale = scale;
+                button.setScaleX(scale);
+                button.setScaleY(scale);
+            }
             // The circle can be larger than the button (Explore's are small) and is nudged in
             // from the edge: nothing between the button and the header may clip it. The header
             // itself stays clipped to its bounds (clipHeader).
@@ -392,33 +433,20 @@ final class HeaderBlurController {
                 if (g == h.wrapper) break;
             }
         }
+        h.stepAt = moving ? nanos : 0;
+        if (moving) {
+            for (View button : h.buttons) button.postInvalidateOnAnimation();
+        }
     }
 
     /**
-     * iOS only shows the circles while the feed scrolls fast; at rest the icons blend into the
-     * header. Measures how fast an item of the list moves and eases the circles in and out.
+     * The circles show whenever the feed is scrolled away from its top, and fade out only as it
+     * comes back to the very top, following the finger over the last {@link #REVEAL_RANGE_DP}.
+     * At the top the icons blend into the header.
      */
     private float updateReveal(Header h, long now) {
         View list = h.scroller != null ? h.scroller.get() : null;
-        long dt = h.speedAt == 0 ? 0 : now - h.speedAt;
-        h.speedAt = now;
-        if (list instanceof ViewGroup && ((ViewGroup) list).getChildCount() > 0) {
-            ViewGroup group = (ViewGroup) list;
-            View anchor = h.speedAnchor != null ? h.speedAnchor.get() : null;
-            if (anchor != null && anchor.getParent() == group && dt > 0) {
-                float speed = Math.abs(anchor.getTop() - h.speedAnchorTop) / (float) dt;
-                if (speed > FAST_SCROLL_DP_PER_MS * density) h.lastFastAt = now;
-            } else {
-                anchor = group.getChildAt(group.getChildCount() / 2);
-            }
-            if (h.speedAnchor == null || h.speedAnchor.get() != anchor) h.speedAnchor = new WeakReference<>(anchor);
-            h.speedAnchorTop = anchor.getTop();
-        }
-        boolean show = h.lastFastAt != 0 && now - h.lastFastAt < REVEAL_HOLD_MS;
-        if (dt > 0) {
-            float step = dt / (float) (show ? FADE_IN_MS : FADE_OUT_MS);
-            h.reveal = show ? Math.min(1f, h.reveal + step) : Math.max(0f, h.reveal - step);
-        }
+        h.reveal = list == null ? 0f : scrolledFraction(list, Math.round(REVEAL_RANGE_DP * density));
         return h.reveal;
     }
 
@@ -442,7 +470,7 @@ final class HeaderBlurController {
         ArrayList<GlassButtonDrawable> glass = new ArrayList<>();
         for (View button : now) {
             int old = h.buttons.indexOf(button);
-            glass.add(old >= 0 ? h.glass.get(old) : new GlassButtonDrawable(density));
+            glass.add(old >= 0 ? h.glass.get(old) : new GlassButtonDrawable(density, h.group));
         }
         h.buttons.clear();
         h.buttons.addAll(now);
@@ -618,6 +646,23 @@ final class HeaderBlurController {
             bottom = Math.min(bottom, y + h.header.getHeight());
         }
         return bottom;
+    }
+
+    /**
+     * Where the status bar and camera cutout end, measured from the page's top (0 or less when
+     * the page starts below them).
+     */
+    private int cameraBottom(View page) {
+        WindowInsets insets = root.getRootWindowInsets();
+        if (insets == null) return 0;
+        int top;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            top = insets.getInsets(WindowInsets.Type.statusBars() | WindowInsets.Type.displayCutout()).top;
+        } else {
+            top = insets.getSystemWindowInsetTop();
+        }
+        page.getLocationInWindow(location);
+        return Math.max(0, top - Math.round(location[1] - page.getTranslationY()));
     }
 
     /**
