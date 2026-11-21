@@ -123,19 +123,21 @@ Patching YouTube Music without GmsCore support stops with a message saying so, r
 
 Instagram's iOS 26 Liquid Glass design on Android, matched against screen recordings of the iOS app.
 
+- **Two styles.** The *Navigation bar* entry in the settings menu opens with two cards: *Solid*, a plain pill floating over the page and the lightest on the phone (nothing behind it is recorded, blurred or bent), and *Liquid Glass*. Each has its own customize page.
 - **Floating glass tab bar.** A frosted pill with live background blur, a subtle refracting rim and a grey capsule behind the selected tab.
 - **Shrinks while scrolling.** Scrolling down scales the whole bar down (every tab stays visible and tappable), scrolling up brings it back.
 - **Gliding selection.** Drag along the bar to slide the grey selection capsule between tabs, as on iOS, with a haptic tick per tab; let go to open the tab underneath. Switch on *Glass while dragging* to turn the capsule into clear glass while it moves.
+- **Switch after the glide.** A tapped tab opens once the selection has glided to it, so the moment Instagram spends building the page doesn't stutter the glide (on by default).
 - **Adaptive tint.** The glass frosts more when what's behind it would make the icons hard to read, and turns dark on Reels and in dark mode.
-- **Frosted header.** On Home and Explore the feed runs up under the header and the status bar, blurred and faded towards the top edge of the screen, like the blur behind the bar at the bottom. When the header slides away the status bar stays frosted. *Blur under the header* (on by default) turns it off. As on iOS, the header's buttons (new post, notifications, saved, more) blend into it at rest and get glass circles while the feed scrolls fast (*Glass header buttons*).
+- **Frosted header.** On Home and Explore the feed runs up under the header and the status bar, blurred and faded towards the top edge of the screen, like the blur behind the bar at the bottom. When the header slides away the status bar stays frosted. As on iOS, the header's buttons (new post, notifications, saved, more) blend into it at rest and get glass circles while the feed scrolls fast. These and the glass share menu live in their own *Liquid Glass* entry of the settings menu (*Blur under the header*, *Glass header buttons*, *Glass share menu*, all on by default).
 - **Videos blur too.** Instagram normally plays videos in a separate layer apps can't see, which would leave the glass solid over them. *Blur videos behind the bar* (on by default) switches the player to Instagram's other way of drawing video, so the glass and the blur at the bottom of the screen blur videos like the rest of the feed.
 - **southstar21 style.** An optional switch in the settings menu (off by default) gives the bar thicker glass that bends what's behind it towards the edges. A press swells the selection into a drop of clear glass that bends what's under its rim outward, with rainbow fringes at the edge; it wobbles, stretches as you drag it and ticks over each tab. The bar shrinks back behind the drop, leans and glows under your finger.
-- **Customize navbar.** A page in the settings menu with a live preview of the bar pinned at the top: tap and drag along it, scroll the sample feed under it, and it changes as you move each slider.
-  - **Under the preview:** light or dark, three backdrops (photos, text, colors), pause, hold to compare with the default look, and one-tap presets (iOS, Clear, Frosted, Bold, Minimal, Neon).
-  - **A "?" on every setting** opens a short demo: the bar sweeps that one setting from low to high on its own, acting out a drag, taps or scrolling where that's what shows it. The demos are drawn live, so they add no files.
-  - **Glass:** blur, refraction, opacity, vibrancy, clear edge, rim, end glare, shadow and a tint color.
+- **Customize pages.** Each style's page has a live preview of the bar pinned at the top: tap and drag along it, scroll the sample feed under it, and it changes as you move each slider.
+  - **Under the preview:** light or dark, three backdrops (photos, text, colors), pause, hold to compare with the default look, and on the glass page one-tap presets (iOS, Clear, Frosted, Bold, Minimal, Neon).
+  - **A "?" on every setting** opens a short demo of what it changes: the bar sweeping that setting while it acts out a drag, taps or scrolling, or a small mock screen for the header blur, header buttons, share menu and videos. The demos are drawn live, so they add no files.
+  - **Solid:** color, rim, shadow, shape and selection.
+  - **Liquid Glass:** blur, refraction, opacity, vibrancy, clear edge, rim, end glare, shadow, tint, tilt light, shape, selection (shade, width, inset, 3D pill, edge colors, drop size) and blur videos.
   - **Shape:** height, side margin, bottom gap, roundness and tab inset.
-  - **Selection:** shade, width, inset, 3D pill, edge colors and drop size.
 - Taps, double taps and long presses on the tabs still go to Instagram untouched.
 
 Android 13+ gets the full effect, Android 12 gets blur without refraction, and older versions get a translucent tinted pill.

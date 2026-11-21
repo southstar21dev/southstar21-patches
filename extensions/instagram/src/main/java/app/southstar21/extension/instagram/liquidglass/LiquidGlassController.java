@@ -141,9 +141,9 @@ final class LiquidGlassController implements ViewTreeObserver.OnPreDrawListener 
             lens.setOutlineProvider(null);
         }
 
-        if (!preview && LiquidGlassNavBarPatch.HEADER_BLUR.get()) {
+        if (!preview && LiquidGlassNavBarPatch.effect(LiquidGlassNavBarPatch.HEADER_BLUR)) {
             headerBlur = new HeaderBlurController(bar.getRootView(), density,
-                    LiquidGlassNavBarPatch.GLASS_HEADER_BUTTONS.get());
+                    LiquidGlassNavBarPatch.effect(LiquidGlassNavBarPatch.GLASS_HEADER_BUTTONS));
         }
 
         if (!preview) {
@@ -191,7 +191,9 @@ final class LiquidGlassController implements ViewTreeObserver.OnPreDrawListener 
         relaidOut = false;
         try {
             enforce();
-            if (bar.getVisibility() == View.VISIBLE && !preview) {
+            // A solid bar shows nothing of what's behind it: no copies, redraws or sampling for it.
+            boolean solid = styleSource.get().solid;
+            if (bar.getVisibility() == View.VISIBLE && !preview && !solid) {
                 // Copy the videos under the bar, its glass and lens (which pokes out above it) and
                 // the edge blur, down to the bottom of the screen.
                 ViewGroup parent = (ViewGroup) bar.getParent();
@@ -199,7 +201,7 @@ final class LiquidGlassController implements ViewTreeObserver.OnPreDrawListener 
                 snapshotRegion.set(bar.getLeft(), top, bar.getRight(), Math.max(top, parent.getHeight() + bottomInset));
                 snapshots.update(snapshotRegion);
             }
-            if (bar.getVisibility() == View.VISIBLE) {
+            if (bar.getVisibility() == View.VISIBLE && !solid) {
                 // Content behind the bar may have changed this frame. Invalidating during
                 // pre-draw folds the redraw into the current frame instead of scheduling a new one.
                 glass.invalidateSelf();
@@ -229,7 +231,7 @@ final class LiquidGlassController implements ViewTreeObserver.OnPreDrawListener 
                     android.util.Log.e(LiquidGlassNavBarPatch.TAG, "Disabling the header blur", t);
                 }
             }
-            if (bar.getVisibility() == View.VISIBLE && !preview) {
+            if (bar.getVisibility() == View.VISIBLE && !preview && !solid) {
                 glass.getPill().round(sampleRect);
                 sampler.maybeSample(sampleRect, dp(20));
             }
@@ -325,7 +327,9 @@ final class LiquidGlassController implements ViewTreeObserver.OnPreDrawListener 
             relaidOut = true;
         }
         bottomBlur.setDark(dark);
-        setShown(bottomBlur, barShown);
+        // A solid bar has no glass, and no blur along the bottom either.
+        NavbarStyle style = styleSource.get();
+        setShown(bottomBlur, barShown && !style.solid && !style.demoVideoHole);
     }
 
     private static void setShown(View v, boolean shown) {

@@ -131,6 +131,19 @@ final class NavbarStyle {
     final boolean haptics;
     /** A tap on another tab opens it once the selection has glided there. */
     final boolean switchAfterGlide;
+    /** A plain opaque pill: nothing behind the bar is recorded, blurred or bent. */
+    final boolean solid;
+    /** Demos only: the tilt the glint follows (radians) in place of the phone's, or NaN. */
+    final float demoTilt;
+    /** Demos only: the bar is over a video it can't see, as with Blur videos off. */
+    final boolean demoVideoHole;
+    /** The tilt the glint follows: the phone's, or a demo's. */
+    float tilt() {
+        return Float.isNaN(demoTilt) ? TiltLight.angle() : demoTilt;
+    }
+
+    /** Override keys for the two demo values above. */
+    static final String DEMO_TILT = "demo_tilt", DEMO_VIDEO_HOLE = "demo_video_hole";
     /** The glass highlight moves as the phone tilts. */
     final boolean tiltLight;
     final boolean shrinkOnScroll;
@@ -170,13 +183,19 @@ final class NavbarStyle {
         selectionInsetDp = i(SELECTION_INSET);
         dropScale = i(DROP_SIZE) / 100f;
         shrunkScale = i(SHRUNK_SIZE) / 100f;
-        southstar21 = b(LiquidGlassNavBarPatch.SOUTHSTAR21_STYLE);
-        glassyPill = b(LiquidGlassNavBarPatch.GLASSY_PILL);
-        glassWhileDragging = b(LiquidGlassNavBarPatch.GLASS_WHILE_DRAGGING);
+        solid = b(LiquidGlassNavBarPatch.SOLID);
+        // The solid bar has none of the glass: its selection is the plain capsule.
+        southstar21 = !solid && b(LiquidGlassNavBarPatch.SOUTHSTAR21_STYLE);
+        glassyPill = !solid && b(LiquidGlassNavBarPatch.GLASSY_PILL);
+        glassWhileDragging = !solid && b(LiquidGlassNavBarPatch.GLASS_WHILE_DRAGGING);
         edgeColors = i(LiquidGlassNavBarPatch.EDGE_COLORS) / 100f;
         haptics = b(LiquidGlassNavBarPatch.HAPTICS);
         switchAfterGlide = b(LiquidGlassNavBarPatch.SWITCH_AFTER_GLIDE);
-        tiltLight = b(LiquidGlassNavBarPatch.TILT_LIGHT);
+        tiltLight = !solid && b(LiquidGlassNavBarPatch.TILT_LIGHT);
+        Integer tilt = overrides != null ? overrides.get(DEMO_TILT) : null;
+        demoTilt = tilt != null ? tilt / 1000f : Float.NaN;
+        Integer hole = overrides != null ? overrides.get(DEMO_VIDEO_HOLE) : null;
+        demoVideoHole = hole != null && hole != 0;
         shrinkOnScroll = b(LiquidGlassNavBarPatch.SHRINK_ON_SCROLL);
     }
 
@@ -246,8 +265,8 @@ final class NavbarStyle {
     static void applyPreset(String name) {
         java.util.Map<String, Integer> values = PRESETS.get(name);
         if (values == null) return;
-        LiquidGlassNavBarPatch.SETTINGS.resetCustomization();
-        for (app.southstar21.extension.instagram.settings.Setting setting : LiquidGlassNavBarPatch.SETTINGS.customizeSettings) {
+        for (app.southstar21.extension.instagram.settings.Setting setting : lookSettings()) setting.reset();
+        for (app.southstar21.extension.instagram.settings.Setting setting : lookSettings()) {
             Integer value = values.get(setting.key);
             if (value == null) continue;
             if (setting instanceof IntSetting) ((IntSetting) setting).set(value);
@@ -269,7 +288,7 @@ final class NavbarStyle {
     /** The preset the current settings match exactly, or null. */
     static String activePreset() {
         java.util.Map<String, Integer> current = new java.util.HashMap<>();
-        for (app.southstar21.extension.instagram.settings.Setting setting : LiquidGlassNavBarPatch.SETTINGS.customizeSettings) {
+        for (app.southstar21.extension.instagram.settings.Setting setting : lookSettings()) {
             if (setting instanceof IntSetting) current.put(setting.key, ((IntSetting) setting).get());
             else if (setting instanceof ChoiceSetting) current.put(setting.key, ((ChoiceSetting) setting).get());
             else if (setting instanceof app.southstar21.extension.instagram.settings.BooleanSetting) {
@@ -282,6 +301,17 @@ final class NavbarStyle {
             if (expected.equals(current)) return name;
         }
         return null;
+    }
+
+    /**
+     * The settings that make up the bar's look, which presets set and compare: the customize
+     * pages' settings, less Blur videos (how videos play, and it needs a restart).
+     */
+    private static java.util.List<app.southstar21.extension.instagram.settings.Setting> lookSettings() {
+        java.util.List<app.southstar21.extension.instagram.settings.Setting> list =
+                new java.util.ArrayList<>(LiquidGlassNavBarPatch.SETTINGS.customizeSettings);
+        list.remove(LiquidGlassNavBarPatch.BLUR_VIDEOS);
+        return list;
     }
 
     private static NavbarStyle defaults;
@@ -299,7 +329,7 @@ final class NavbarStyle {
 
     private static java.util.Map<String, Integer> defaultValues() {
         java.util.Map<String, Integer> map = new java.util.HashMap<>();
-        for (app.southstar21.extension.instagram.settings.Setting setting : LiquidGlassNavBarPatch.SETTINGS.customizeSettings) {
+        for (app.southstar21.extension.instagram.settings.Setting setting : lookSettings()) {
             if (setting instanceof IntSetting) map.put(setting.key, ((IntSetting) setting).getDefault());
             else if (setting instanceof ChoiceSetting) map.put(setting.key, ((ChoiceSetting) setting).getDefault());
             else if (setting instanceof app.southstar21.extension.instagram.settings.BooleanSetting) {

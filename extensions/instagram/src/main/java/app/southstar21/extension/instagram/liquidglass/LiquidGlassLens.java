@@ -594,7 +594,8 @@ final class LiquidGlassLens extends View {
      */
     private void updateTilt() {
         boolean want = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && isAttachedToWindow()
-                && getWindowVisibility() == VISIBLE && bar.getVisibility() == VISIBLE && style().tiltLight;
+                && getWindowVisibility() == VISIBLE && bar.getVisibility() == VISIBLE && style().tiltLight
+                && !style().solid;
         if (want == tilting) return;
         tilting = want;
         TiltLight.setActive(getContext(), tiltListener, want);
@@ -1277,7 +1278,7 @@ final class LiquidGlassLens extends View {
             sig[9] = 1f;
             return;
         }
-        TiltLight.glint(lens.width() / 2f, lens.height() / 2f, r, TiltLight.angle(), glintAt);
+        TiltLight.glint(lens.width() / 2f, lens.height() / 2f, r, style().tilt(), glintAt);
         sig[7] = glintAt[0];
         sig[8] = glintAt[1];
         sig[9] = glintAt[4];
