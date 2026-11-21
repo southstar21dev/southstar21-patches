@@ -315,12 +315,29 @@ public final class SettingsMenu {
                 enabled -> setEnabled(dependent, enabled)));
         list.addView(main);
 
-        if (patch.preview != null) {
+        if (patch.header != null) {
+            View block = null;
+            try {
+                block = patch.header.create(activity, this::replaceTop);
+            } catch (Throwable t) {
+                android.util.Log.e("southstar21", "Header failed", t);
+            }
+            if (block != null) {
+                LinearLayout.LayoutParams blockLp = new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                blockLp.topMargin = dp(18);
+                list.addView(block, blockLp);
+                dependent.add(block);
+            }
+        }
+
+        PatchSettings.CustomizePage page = patch.activeCustomizePage();
+        if (page != null && page.preview != null) {
             View space = sectionHeader(null);
             list.addView(space);
             LinearLayout customize = cardView();
-            customize.addView(navigationRow(patch.glyph, patch.color, patch.customizeTitle, patch.customizeSummary,
-                    "", () -> push(() -> buildCustomizePage(patch), true)));
+            customize.addView(navigationRow(patch.glyph, patch.color, page.title, page.summary,
+                    "", () -> push(() -> buildCustomizePage(patch, page), true)));
             list.addView(customize);
             dependent.add(space);
             dependent.add(customize);
@@ -353,9 +370,9 @@ public final class SettingsMenu {
      * and its settings scrolling beneath. Sliders apply while they're dragged, so the preview
      * follows the finger.
      */
-    private View buildCustomizePage(PatchSettings patch) {
+    private View buildCustomizePage(PatchSettings patch, PatchSettings.CustomizePage page) {
         LinearLayout list = pageList();
-        addGroups(list, patch, patch.customizeGroups, new ArrayList<>(), true);
+        addGroups(list, patch, page.groups, new ArrayList<>(), true);
 
         list.addView(sectionHeader(null));
         LinearLayout reset = cardView();
@@ -363,9 +380,9 @@ public final class SettingsMenu {
         resetText.setGravity(Gravity.CENTER);
         resetText.setMinHeight(dp(50));
         resetText.setBackground(ripple());
-        resetText.setOnClickListener(v -> confirm("Reset " + patch.customizeTitle + "?",
-                "The bar goes back to its default look.", "Reset", () -> {
-                    patch.resetCustomization();
+        resetText.setOnClickListener(v -> confirm("Reset " + page.title + "?",
+                "Everything on this page goes back to its default.", "Reset", () -> {
+                    for (Setting setting : page.settings) setting.reset();
                     replaceTop();
                 }));
         reset.addView(resetText, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
@@ -374,7 +391,7 @@ public final class SettingsMenu {
 
         View preview = null;
         try {
-            preview = patch.preview.create(activity, this::replaceTop);
+            preview = page.preview.create(activity, this::replaceTop);
         } catch (Throwable t) {
             android.util.Log.e("southstar21", "Preview failed", t);
         }

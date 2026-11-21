@@ -1,3 +1,19 @@
+## [1.4.0-dev.2](https://github.com/southstar21dev/southstar21-patches/compare/v1.4.0-dev.1...v1.4.0-dev.2) (2026-11-21)
+
+### 🐛 Bug Fixes
+
+* **Liquid Glass navigation bar:** Keep the DM inbox's Instants above the bar ([a495300](https://github.com/southstar21dev/southstar21-patches/commit/a4953001702b4a862ef6b8b2ed97c699895a37f7))
+
+### ✨ New Features
+
+* **Liquid Glass navigation bar:** Solid bar style, a plain floating pill with no blur or glass that runs much smoother on older devices and is the default on fresh installs, plus a new settings layout with a demo for every setting ([00f7d8e](https://github.com/southstar21dev/southstar21-patches/commit/00f7d8e8e2849c6b0a89f937cd906139a69c7114))
+
+## [1.4.0-dev.1](https://github.com/southstar21dev/southstar21-patches/compare/v1.3.0...v1.4.0-dev.1) (2026-11-21)
+
+### ✨ New Features
+
+* **Liquid Glass navigation bar:** Smoother tab switches ([12b0bc1](https://github.com/southstar21dev/southstar21-patches/commit/12b0bc1868b5c89bb6922b1ef58e5472981e4023))
+
 ## [1.3.0](https://github.com/southstar21dev/southstar21-patches/compare/v1.2.1...v1.3.0) (2026-11-19)
 
 ### 🐛 Bug Fixes

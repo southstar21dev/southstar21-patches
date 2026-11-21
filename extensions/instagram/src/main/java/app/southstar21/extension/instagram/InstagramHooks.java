@@ -33,7 +33,8 @@ public final class InstagramHooks {
             watch(activity);
 
             // Start patches here. Each checks it was included and is switched on.
-            if (LiquidGlassNavBarPatch.SETTINGS.isActive()) {
+            // The navigation bar and the other glass are two entries of one patch.
+            if (LiquidGlassNavBarPatch.SETTINGS.isActive() || LiquidGlassNavBarPatch.EFFECTS.isActive()) {
                 LiquidGlassNavBarPatch.onMainActivityReady(activity);
             }
             if (ConsciousGatePatch.SETTINGS.isActive()) {
