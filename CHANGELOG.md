@@ -1,3 +1,9 @@
+## [1.4.0-dev.3](https://github.com/southstar21dev/southstar21-patches/compare/v1.4.0-dev.2...v1.4.0-dev.3) (2026-11-21)
+
+### 🔧 Improvements
+
+* **YouTube Music:** Much lighter glass on older devices ([f6f37ad](https://github.com/southstar21dev/southstar21-patches/commit/f6f37ade228ade352162ab99c389e3ab783e29d2))
+
 ## [1.4.0-dev.2](https://github.com/southstar21dev/southstar21-patches/compare/v1.4.0-dev.1...v1.4.0-dev.2) (2026-11-21)
 
 ### 🐛 Bug Fixes

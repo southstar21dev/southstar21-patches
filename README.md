@@ -64,7 +64,7 @@ Patching YouTube Music without GmsCore support stops with a message saying so, r
 ## Patches
 
 <!-- PATCHES_START EXPANDED -->
-> **[v1.4.0-dev.2](https://github.com/southstar21dev/southstar21-patches/releases/tag/v1.4.0-dev.2)**&nbsp;&nbsp;•&nbsp;&nbsp;`dev`&nbsp;&nbsp;•&nbsp;&nbsp;10 patches total
+> **[v1.4.0-dev.3](https://github.com/southstar21dev/southstar21-patches/releases/tag/v1.4.0-dev.3)**&nbsp;&nbsp;•&nbsp;&nbsp;`dev`&nbsp;&nbsp;•&nbsp;&nbsp;10 patches total
 <details open>
 <summary>📦 Instagram&nbsp;&nbsp;•&nbsp;&nbsp;8 patches</summary>
 <br>
