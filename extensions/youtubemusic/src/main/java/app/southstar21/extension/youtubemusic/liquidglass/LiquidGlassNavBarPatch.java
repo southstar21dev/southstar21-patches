@@ -100,7 +100,7 @@ public final class LiquidGlassNavBarPatch {
             contentBehindBar = true;
             View layout = findView(activity, "watch_while_layout");
             if (layout != null) layout.requestLayout();
-            installMiniPlayer(activity);
+            installMiniPlayer(activity, bar, controller.lens());
             Log.d(TAG, "Installed on " + bar);
         } catch (Throwable t) {
             // Never take the app down over a cosmetic patch.
@@ -109,12 +109,12 @@ public final class LiquidGlassNavBarPatch {
     }
 
     /** The mini player above the bar gets the same glass. */
-    private static void installMiniPlayer(Activity activity) {
+    private static void installMiniPlayer(Activity activity, View bar, View lens) {
         try {
             View page = findView(activity, "player_page");
             int miniPlayerId = id(activity, "mini_player");
             if (!(page instanceof ViewGroup) || miniPlayerId == 0) return;
-            new MiniPlayerGlass(activity, (ViewGroup) page, miniPlayerId, id(activity, "watch_fragment_container")).install();
+            new MiniPlayerGlass(activity, (ViewGroup) page, miniPlayerId, id(activity, "watch_fragment_container")).install(bar, lens);
         } catch (Throwable t) {
             Log.e(TAG, "Failed to install mini player glass", t);
         }

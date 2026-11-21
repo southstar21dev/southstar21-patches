@@ -281,7 +281,7 @@ final class LiquidGlassController implements ViewTreeObserver.OnPreDrawListener 
         int visibility = barShown && alpha > 0f ? View.VISIBLE : View.GONE;
         if (bottomBlur.getVisibility() != visibility) bottomBlur.setVisibility(visibility);
         // Like the glass: re-recording what's behind it every frame kept the app drawing.
-        if (barShown && refresh) bottomBlur.invalidate();
+        if (barShown && refresh) bottomBlur.refreshBackdrop();
     }
 
     /**

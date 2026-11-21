@@ -225,6 +225,8 @@ final class JellyGlass extends Drawable {
     private final int[] location = new int[2];
     private final float[] uniform = new float[4];
     private RenderNode node;
+    /** Holds the shaded glass in a layer (see Layers). */
+    private RenderNode held;
     private RuntimeShader shader;
     private final FullPlayerGlass.Glass[] fallback;
 
@@ -531,7 +533,7 @@ final class JellyGlass extends Drawable {
                 && ox == drawnX && oy == drawnY) {
             int save = canvas.save();
             canvas.translate(-pad, -pad);
-            canvas.drawRenderNode(node);
+            canvas.drawRenderNode(Layers.hold(held, node));
             canvas.restoreToCount(save);
             return;
         }
@@ -542,6 +544,7 @@ final class JellyGlass extends Drawable {
         drawnY = oy;
         if (node == null) {
             node = new RenderNode("JellyGlass");
+            held = Layers.holder("JellyGlassLayer");
             shader = new RuntimeShader(SHADER);
         }
         node.setPosition(0, 0, w, h);
@@ -579,7 +582,7 @@ final class JellyGlass extends Drawable {
 
         int save = canvas.save();
         canvas.translate(-pad, -pad);
-        canvas.drawRenderNode(node);
+        canvas.drawRenderNode(Layers.hold(held, node));
         canvas.restoreToCount(save);
     }
 
