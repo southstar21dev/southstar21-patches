@@ -45,6 +45,8 @@ final class LiquidGlassController implements ViewTreeObserver.OnPreDrawListener 
     private EdgeBlurView bottomBlur;
     /** Progressive blur under the Home and Explore headers. Null when switched off or in a preview. */
     private HeaderBlurController headerBlur;
+    /** The DM inbox's Instants stack, kept above the bar. Null in a preview. */
+    private FloatingAboveBar instants;
     private final int[] location = new int[2];
     /** How far the bar's container stops short of the screen bottom for the navigation bar. */
     private int bottomInset;
@@ -142,6 +144,11 @@ final class LiquidGlassController implements ViewTreeObserver.OnPreDrawListener 
         if (!preview && LiquidGlassNavBarPatch.HEADER_BLUR.get()) {
             headerBlur = new HeaderBlurController(bar.getRootView(), density,
                     LiquidGlassNavBarPatch.GLASS_HEADER_BUTTONS.get());
+        }
+
+        if (!preview) {
+            instants = new FloatingAboveBar(bar.getRootView(), bar.getResources().getIdentifier(
+                    "direct_quick_snap_consumption_preview", "id", "com.instagram.android"));
         }
 
         android.view.Window window = BackdropSampler.windowOf(bar.getContext());
@@ -256,6 +263,22 @@ final class LiquidGlassController implements ViewTreeObserver.OnPreDrawListener 
         enforceGeometry();
         enforceContentMargins();
         enforceEdgeBlurs();
+        enforceFloating();
+    }
+
+    /** Keeps what Instagram pins to a page's bottom corner clear of the bar and its blur. */
+    private void enforceFloating() {
+        if (instants == null) return;
+        int limit = FloatingAboveBar.NO_LIMIT;
+        if (isBarShown()) {
+            // Where the blur above the pill starts, in layout positions (the bar shrinking while
+            // scrolling mustn't move what sits above it); a little into its faint top edge.
+            ViewGroup parent = (ViewGroup) bar.getParent();
+            parent.getLocationInWindow(location);
+            int top = bottomBlur != null ? bottomBlur.getTop() : bar.getTop() - dp(36);
+            limit = location[1] + top + dp(8);
+        }
+        if (instants.enforce(limit)) relaidOut = true;
     }
 
     /**
