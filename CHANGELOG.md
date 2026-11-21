@@ -1,3 +1,9 @@
+## [1.4.0-dev.1](https://github.com/southstar21dev/southstar21-patches/compare/v1.3.0...v1.4.0-dev.1) (2026-11-21)
+
+### ✨ New Features
+
+* **Liquid Glass navigation bar:** Smoother tab switches ([12b0bc1](https://github.com/southstar21dev/southstar21-patches/commit/12b0bc1868b5c89bb6922b1ef58e5472981e4023))
+
 ## [1.3.0](https://github.com/southstar21dev/southstar21-patches/compare/v1.2.1...v1.3.0) (2026-11-19)
 
 ### 🐛 Bug Fixes
