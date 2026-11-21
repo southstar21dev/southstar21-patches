@@ -129,6 +129,8 @@ final class NavbarStyle {
     /** 0..1, 0.5 by default. */
     final float edgeColors;
     final boolean haptics;
+    /** A tap on another tab opens it once the selection has glided there. */
+    final boolean switchAfterGlide;
     /** The glass highlight moves as the phone tilts. */
     final boolean tiltLight;
     final boolean shrinkOnScroll;
@@ -173,6 +175,7 @@ final class NavbarStyle {
         glassWhileDragging = b(LiquidGlassNavBarPatch.GLASS_WHILE_DRAGGING);
         edgeColors = i(LiquidGlassNavBarPatch.EDGE_COLORS) / 100f;
         haptics = b(LiquidGlassNavBarPatch.HAPTICS);
+        switchAfterGlide = b(LiquidGlassNavBarPatch.SWITCH_AFTER_GLIDE);
         tiltLight = b(LiquidGlassNavBarPatch.TILT_LIGHT);
         shrinkOnScroll = b(LiquidGlassNavBarPatch.SHRINK_ON_SCROLL);
     }

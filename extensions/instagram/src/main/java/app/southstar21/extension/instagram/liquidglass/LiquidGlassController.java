@@ -64,6 +64,10 @@ final class LiquidGlassController implements ViewTreeObserver.OnPreDrawListener 
     private int skippedFrames;
     private boolean barWasShown = true;
     private static final int MAX_SKIPPED_FRAMES = 2;
+    /** The selected tab last frame, to notice a page switch. */
+    private View lastTab;
+    /** After a page switch, the videos under the bar aren't copied for this long. */
+    private static final long SWITCH_COPY_PAUSE_MS = 300;
 
     LiquidGlassController(ViewGroup bar, View shadow, boolean extendContent) {
         this(bar, shadow, extendContent, NavbarStyle::get);
@@ -194,6 +198,18 @@ final class LiquidGlassController implements ViewTreeObserver.OnPreDrawListener 
                 glass.invalidateSelf();
             }
             lens.sync();
+            View tab = lens.selectedTabView();
+            if (tab != lastTab) {
+                boolean switched = lastTab != null && tab != null;
+                lastTab = tab;
+                if (switched && !preview) {
+                    // A new page is coming in. Give it the frosted header on its first frame
+                    // instead of up to a scan interval later (which popped it in and dropped a
+                    // frame), and keep video copies off the render thread while it draws.
+                    if (headerBlur != null) headerBlur.rescanSoon();
+                    SurfaceSnapshots.pauseCopies(SWITCH_COPY_PAUSE_MS);
+                }
+            }
             if (headerBlur != null) {
                 try {
                     boolean shown = isBarShown();
@@ -446,11 +462,7 @@ final class LiquidGlassController implements ViewTreeObserver.OnPreDrawListener 
      */
     private void enforceContentMargins() {
         if (baseHeight <= 0) return;
-        // Content behind the bar also runs on under the navigation bar. Full screen viewers
-        // (a reel opened from the feed, a DM or a profile) hide the bar: then nothing needs
-        // room for it and the content must stop above the navigation bar again, or the reel's
-        // comment box ends up under the gesture pill.
-        int target = !isBarShown() ? 0 : contentBehindBar() ? -bottomInset : appliedHeight;
+        int target = contentMarginTarget();
         ViewGroup parent = (ViewGroup) bar.getParent();
         int barIndex = parent.indexOfChild(bar);
         for (int i = 0; i < barIndex; i++) {
@@ -459,7 +471,9 @@ final class LiquidGlassController implements ViewTreeObserver.OnPreDrawListener 
             if (!(child.getLayoutParams() instanceof ViewGroup.MarginLayoutParams)) continue;
             ViewGroup.MarginLayoutParams lp = (ViewGroup.MarginLayoutParams) child.getLayoutParams();
             // Only take over the tab bar margin, leave other margins Instagram may set alone.
-            if (lp.bottomMargin == baseHeight) managedContent.put(child, Boolean.TRUE);
+            if (lp.bottomMargin == baseHeight && managedContent.put(child, Boolean.TRUE) == null) {
+                child.addOnLayoutChangeListener(marginKeeper);
+            }
             if (!managedContent.containsKey(child)) continue;
             if (lp.bottomMargin != target) {
                 lp.bottomMargin = target;
@@ -469,6 +483,33 @@ final class LiquidGlassController implements ViewTreeObserver.OnPreDrawListener 
             clipWhileBarHidden(child);
         }
     }
+
+    /**
+     * The bottom margin managed content should have. Content behind the bar also runs on under
+     * the navigation bar. Full screen viewers (a reel opened from the feed, a DM or a profile)
+     * hide the bar: then nothing needs room for it and the content must stop above the
+     * navigation bar again, or the reel's comment box ends up under the gesture pill.
+     */
+    private int contentMarginTarget() {
+        return !isBarShown() ? 0 : contentBehindBar() ? -bottomInset : appliedHeight;
+    }
+
+    /**
+     * Instagram puts the tab bar margin back on its page container at every tab switch. Caught
+     * at pre-draw, the fix needs a new layout and the switch's first frame is thrown away.
+     * Caught here, while the page is being laid out, Android runs a second layout pass before
+     * drawing, so the new page shows in its first frame. Pre-draw stays as the fallback.
+     */
+    private final View.OnLayoutChangeListener marginKeeper = (v, left, top, right, bottom,
+                                                             oldLeft, oldTop, oldRight, oldBottom) -> {
+        if (preview || baseHeight <= 0 || !managedContent.containsKey(v)) return;
+        if (!(v.getLayoutParams() instanceof ViewGroup.MarginLayoutParams)) return;
+        ViewGroup.MarginLayoutParams lp = (ViewGroup.MarginLayoutParams) v.getLayoutParams();
+        int target = contentMarginTarget();
+        if (lp.bottomMargin == target) return;
+        lp.bottomMargin = target;
+        v.setLayoutParams(lp);
+    };
 
     /**
      * Opening a reel from the feed hides the bar at once and takes the feed out of the layout,

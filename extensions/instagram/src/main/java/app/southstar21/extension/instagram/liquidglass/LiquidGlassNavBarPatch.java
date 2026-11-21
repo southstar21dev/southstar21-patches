@@ -87,6 +87,13 @@ public final class LiquidGlassNavBarPatch {
                     + "glass with the feed blurred behind it, reaching down to the bottom of the screen. Its "
                     + "search field and the grey share buttons (Add to story, Copy link and the rest) get "
                     + "glass too. Other menus stay as they are. Takes effect the next time you open the menu.");
+    static final BooleanSetting SWITCH_AFTER_GLIDE = new BooleanSetting("liquid_glass_switch_after_glide",
+            "Switch after the glide", "A tapped tab opens once the selection has glided to it, so the "
+            + "page switch doesn't stutter the glide.", false, true)
+            .help("Instagram pauses for a moment while it builds the page you tapped. Normally that pause "
+                    + "lands right as the selection starts gliding and makes it stutter. With this on, the "
+                    + "selection glides over first and the page opens as it arrives, a fraction of a second "
+                    + "later. Taps on the selected tab and long presses work as before.");
     static final BooleanSetting HAPTICS = new BooleanSetting("liquid_glass_haptics",
             "Haptics", "A tick when the selection glides over a tab.", false, true)
             .help("A light tick each time the selection glides over another tab while you drag it.");
@@ -96,7 +103,7 @@ public final class LiquidGlassNavBarPatch {
             "iOS 26 style glass tab bar. Defaults come from the patch options in Morphe Manager.",
             LiquidGlassNavBarPatch::isIncluded,
             new SettingsGroup("Behavior", EXTEND_CONTENT, SHRINK_ON_SCROLL,
-                    NavbarStyle.SHRUNK_SIZE.shownWhen(SHRINK_ON_SCROLL), HEADER_BLUR, GLASS_HEADER_BUTTONS.shownWhen(HEADER_BLUR), GLASS_SHARE_MENU, BLUR_VIDEOS, HAPTICS))
+                    NavbarStyle.SHRUNK_SIZE.shownWhen(SHRINK_ON_SCROLL), HEADER_BLUR, GLASS_HEADER_BUTTONS.shownWhen(HEADER_BLUR), GLASS_SHARE_MENU, BLUR_VIDEOS, SWITCH_AFTER_GLIDE, HAPTICS))
             .customize("Customize navbar", "Glass, shape and selection, with a live preview.",
                     NavbarPreview::customizer,
                     new SettingsGroup("Style", "The southstar21 style moves differently: the bar shrinks back "
