@@ -1,3 +1,9 @@
+## [1.4.0-dev.4](https://github.com/southstar21dev/southstar21-patches/compare/v1.4.0-dev.3...v1.4.0-dev.4) (2026-11-22)
+
+### ✨ New Features
+
+* Support Instagram 456.1.0.56.78 ([ba3d6c2](https://github.com/southstar21dev/southstar21-patches/commit/ba3d6c298512f24826741098f1de973b7b87bd23))
+
 ## [1.4.0-dev.3](https://github.com/southstar21dev/southstar21-patches/compare/v1.4.0-dev.2...v1.4.0-dev.3) (2026-11-21)
 
 ### 🔧 Improvements
