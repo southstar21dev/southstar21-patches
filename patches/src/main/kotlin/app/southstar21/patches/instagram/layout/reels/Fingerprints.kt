@@ -1,6 +1,7 @@
 package app.southstar21.patches.instagram.layout.reels
 
 import app.morphe.patcher.Fingerprint
+import app.morphe.patcher.literal
 import app.morphe.patcher.methodCall
 import app.morphe.patcher.patch.PatchException
 import com.android.tools.smali.dexlib2.AccessFlags
@@ -83,11 +84,19 @@ internal object MediaProductTypeFingerprint : Fingerprint(
 
 // endregion
 
-/** Parses one section ("DiscoverySection") of the Explore grid. */
+/**
+ * Parses one section ("DiscoverySection") of the Explore grid.
+ *
+ * 456 moved the "explore_item_info" key into Instagram's obfuscated string pool, but the
+ * key switch still compares its hash code, so that literal is matched instead.
+ */
 internal object ParseExploreSectionFingerprint : Fingerprint(
     name = "unsafeParseFromJson",
     returnType = "Ljava/lang/Object;",
-    strings = listOf("DiscoverySection", "explore_item_info"),
+    strings = listOf("DiscoverySection"),
+    filters = listOf(
+        literal("explore_item_info".hashCode()),
+    ),
 )
 
 // region Player
