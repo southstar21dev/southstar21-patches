@@ -1,3 +1,9 @@
+## [1.4.0-dev.5](https://github.com/southstar21dev/southstar21-patches/compare/v1.4.0-dev.4...v1.4.0-dev.5) (2026-11-23)
+
+### 🐛 Bug Fixes
+
+* **Liquid Glass navigation bar:** No flash of Instagram's bar at launch ([e11342e](https://github.com/southstar21dev/southstar21-patches/commit/e11342eb15a18c815538fd01cd8bd117be203e53)), closes [#14](https://github.com/southstar21dev/southstar21-patches/issues/14)
+
 ## [1.4.0-dev.4](https://github.com/southstar21dev/southstar21-patches/compare/v1.4.0-dev.3...v1.4.0-dev.4) (2026-11-22)
 
 ### ✨ New Features
