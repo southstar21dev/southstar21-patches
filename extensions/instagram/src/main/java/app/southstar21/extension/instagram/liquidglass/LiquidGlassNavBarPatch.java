@@ -5,6 +5,7 @@ import android.content.res.Resources;
 import android.util.Log;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewTreeObserver;
 
 import java.util.WeakHashMap;
 
@@ -235,10 +236,50 @@ public final class LiquidGlassNavBarPatch {
             Log.e(TAG, "Failed to watch for the share sheet", t);
         }
         if (!SETTINGS.isActive()) return;
+        installTabBar(activity);
+    }
+
+    /**
+     * Installs on the tab bar before Instagram draws it, so its own bar never shows at launch
+     * (issue #14). Called when the main activity starts: its layout is set, but the tab bar may
+     * still be on its way, so each frame looks for it until it's there. The frame it turns up in
+     * is skipped and drawn again with the pill's layout. {@link #onMainActivityReady} stays as
+     * the fallback.
+     */
+    public static void installBeforeFirstDraw(Activity activity) {
+        // Looked up once: until the bar turns up (the whole login screen, say) this runs every frame.
+        int barId = findId(activity, "tab_bar");
+        if (barId == 0) return;
+        View decor = activity.getWindow().getDecorView();
+        decor.getViewTreeObserver().addOnPreDrawListener(new ViewTreeObserver.OnPreDrawListener() {
+            @Override
+            public boolean onPreDraw() {
+                try {
+                    if (activity.isFinishing() || activity.isDestroyed()) {
+                        decor.getViewTreeObserver().removeOnPreDrawListener(this);
+                        return true;
+                    }
+                    View bar = activity.findViewById(barId);
+                    if (bar == null) return true;
+                    decor.getViewTreeObserver().removeOnPreDrawListener(this);
+                    if (installed.containsKey(bar)) return true;
+                    // Skip this frame only if the pill went in: it still has the stock layout.
+                    return !installTabBar(activity);
+                } catch (Throwable t) {
+                    decor.getViewTreeObserver().removeOnPreDrawListener(this);
+                    Log.e(TAG, "Early tab bar install failed", t);
+                    return true;
+                }
+            }
+        });
+    }
+
+    /** @return whether the glass was installed now (false if it already was, or failed) */
+    private static boolean installTabBar(Activity activity) {
         try {
             View bar = findView(activity, "tab_bar");
-            if (!(bar instanceof ViewGroup) || installed.containsKey(bar)) return;
-            if (!(bar.getParent() instanceof ViewGroup)) return;
+            if (!(bar instanceof ViewGroup) || installed.containsKey(bar)) return false;
+            if (!(bar.getParent() instanceof ViewGroup)) return false;
 
             LiquidGlassController controller = new LiquidGlassController(
                     (ViewGroup) bar,
@@ -247,17 +288,24 @@ public final class LiquidGlassNavBarPatch {
             );
             controller.install();
             installed.put(bar, controller);
+            return true;
         } catch (Throwable t) {
             // Never take the app down over a cosmetic patch.
             Log.e(TAG, "Failed to install liquid glass tab bar", t);
+            return false;
         }
     }
 
     static View findView(Activity activity, String name) {
+        int id = findId(activity, name);
+        return id == 0 ? null : activity.findViewById(id);
+    }
+
+    private static int findId(Activity activity, String name) {
         Resources res = activity.getResources();
         // Resources keep the original package name even if the app was cloned/renamed.
         int id = res.getIdentifier(name, "id", "com.instagram.android");
         if (id == 0) id = res.getIdentifier(name, "id", activity.getPackageName());
-        return id == 0 ? null : activity.findViewById(id);
+        return id;
     }
 }
