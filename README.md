@@ -113,7 +113,7 @@ Patching YouTube Music without GmsCore support stops with a message saying so, r
 
 | 💊&nbsp;Patch | 📜&nbsp;Description | ⚙️&nbsp;Options |
 |----------|----------------|-----------|
-| [Liquid Glass navigation bar](#liquid-glass-navigation-bar-youtube-music) | Turns the bottom tab bar into floating iOS 26 style Liquid Glass with live background blur and edge refraction, with the mini player docked beside it as round album art with a progress ring, a glass playback bar above, and the content scrolling on behind them. Refraction needs Android 13+, blur needs Android 12+, older versions get a tinted pill. Requires Morphe Patches with GmsCore support, applied together in Expert mode. | • Blur radius<br>• Refraction strength<br>• southstar21 style |
+| [Liquid Glass navigation bar](#liquid-glass-navigation-bar-youtube-music) | Turns the bottom tab bar into floating iOS 26 style Liquid Glass with live background blur and edge refraction, with the mini player docked beside it as round album art with a progress ring, a glass playback bar above, and the content scrolling on behind them. Lightweight glass (the default, switchable to the full effect in the in-app menu) blurs on Android 14+ and gets a solid pill before that; the full effect adds refraction on Android 13+ and blur on Android 12+. Requires Morphe Patches with GmsCore support, applied together in Expert mode. | • Blur radius<br>• Refraction strength<br>• southstar21 style |
 
 </details>
 
@@ -280,7 +280,10 @@ YouTube Music's bottom tab bar and the mini player as Liquid Glass, with the sam
 - **Content behind the glass.** Pages scroll on behind the bar and the mini player instead of stopping above them.
 - **Gliding selection.** Press the selected tab and it swells into a drop of clear glass you can drag between tabs; let go to open the tab underneath.
 
-Like on Spotify, the look comes from the patch options in Morphe Manager (blur radius, refraction strength, southstar21 style). Android 13+ gets the full effect, Android 12 gets blur without refraction, and older versions get a translucent tinted pill.
+The blur radius, refraction strength and southstar21 style come from the patch options in Morphe Manager, like on Spotify. How the glass is drawn is switched inside the app: a sliders button in YouTube Music's top bar, next to the notifications bell, opens the **southstar21 Patches** menu, laid out like the Instagram one. Its *Liquid Glass* page has two style cards, which apply right away:
+
+- **Lightweight** (the default) draws the glass the way Morphe Patches' own glass navigation bar does, and is much smoother on most phones. What's behind the glass goes through one blur with a little extra color, under a translucent fill, a sheen and a painted shadow. There's no refraction, no blurred band along the bottom of the screen, the player's buttons are painted glass circles that still swell under your finger, and the full player keeps YouTube Music's own background instead of the blurred album cover. Android 14+ gets the blur; older versions get a solid pill, since a blur redrawn while the player moves can crash the app on Android 12 and 13.
+- **Full Liquid Glass**: refraction on the bar, the selection drop and the player's liquid buttons, plus the blurred band along the bottom. Android 13+ gets the full effect, Android 12 gets blur without refraction, and older versions get a translucent tinted pill.
 
 <details>
 <summary>How it works</summary>
@@ -296,6 +299,8 @@ A hook in `MusicActivity.onWindowFocusChanged` (unobfuscated) starts the extensi
 Every patched Instagram gets a **southstar21 Patches** button in the top bar of your own profile, next to Threads and ☰. It opens a menu listing every patch you included, each with its own page where it can be switched on and off and configured.
 
 Patches you didn't select in Morphe Manager aren't listed. **Restart Instagram** applies settings that only take effect at launch, and **Reset all settings** puts everything back to its defaults.
+
+YouTube Music gets the same menu, in its dark colors, behind a sliders button next to the notifications bell in the top bar. So far it holds the choice between lightweight and full Liquid Glass, with **Restart YouTube Music** and **Reset all settings**. The first time YouTube Music opens with the patches, a welcome card points at that button, thanks you for installing, and explains how to switch to the full Liquid Glass.
 
 <br clear="right">
 

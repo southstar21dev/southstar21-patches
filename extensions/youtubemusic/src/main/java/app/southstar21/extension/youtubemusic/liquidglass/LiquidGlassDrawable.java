@@ -362,6 +362,13 @@ final class LiquidGlassDrawable extends Drawable {
         float radius = cornerRadius();
         stepTint();
 
+        if (style.lightweight()) {
+            drawLightweight(canvas, radius);
+            drawGlow(canvas, radius);
+            if (style.rim > 0f) drawRim(canvas, radius);
+            return;
+        }
+
         boolean glassDrawn = false;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && canvas.isHardwareAccelerated()) {
             glassDrawn = drawBackdrop(canvas, radius);
@@ -376,6 +383,147 @@ final class LiquidGlassDrawable extends Drawable {
         drawGlow(canvas, radius);
         drawRim(canvas, radius);
     }
+
+    // region Lightweight glass
+
+    /**
+     * The blurred backdrop's colors made more vivid and a little brighter, which reads as frosted
+     * glass; a blur alone leaves them dull and grey.
+     */
+    private static final android.graphics.ColorMatrix FROSTED = frosted();
+
+    private static android.graphics.ColorMatrix frosted() {
+        android.graphics.ColorMatrix colors = new android.graphics.ColorMatrix();
+        colors.setSaturation(1.5f);
+        float lift = 15f;
+        colors.postConcat(new android.graphics.ColorMatrix(new float[]{
+                1, 0, 0, 0, lift,
+                0, 1, 0, 0, lift,
+                0, 0, 1, 0, lift,
+                0, 0, 0, 1, 0}));
+        return colors;
+    }
+
+    /** The content behind the pill, blurred and frosted by its RenderEffect. */
+    private RenderNode lightNode;
+    private float lightBlur = -1f;
+    private final android.graphics.Path lightPath = new android.graphics.Path();
+    private final RectF lightArea = new RectF();
+    private final RectF shadowRect = new RectF();
+    private final Paint shadowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint sheenPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    /** The pill's top and bottom and the theme the sheen's gradient was made for. */
+    private float sheenTop = Float.NaN, sheenBottom = Float.NaN;
+    private boolean sheenDark;
+
+    /**
+     * The glass drawn simply: what's behind the pill through one blur (and a color matrix),
+     * re-recorded on each draw into a plain node, clipped to the pill, under a translucent fill,
+     * a sheen and a painted shadow. No refraction shader, no layers, no elevation shadow, no edge
+     * blur. Blurred only on Android 14+ (on 12 and 13 a blur redrawn while the player moves can
+     * crash the app); before that the backdrop's base color stands in for the page, or its text
+     * would show sharp through the glass.
+     */
+    private void drawLightweight(Canvas canvas, float radius) {
+        drawPaintedShadow(canvas, radius);
+
+        float blur = style.blurDp * density;
+        if (blur > 0f) {
+            lightPath.reset();
+            lightPath.addRoundRect(pill, radius, radius, android.graphics.Path.Direction.CW);
+            int save = canvas.save();
+            canvas.clipPath(lightPath);
+            boolean blurred = Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE
+                    && canvas.isHardwareAccelerated() && drawLightBackdrop(canvas, blur);
+            if (!blurred) canvas.drawColor(dark ? Color.BLACK : Color.WHITE);
+            canvas.restoreToCount(save);
+        }
+
+        tintPaint.setColor(materialColor(Math.round(255 * currentTint())));
+        canvas.drawRoundRect(pill, radius, radius, tintPaint);
+
+        if (pill.top != sheenTop || pill.bottom != sheenBottom || dark != sheenDark) {
+            sheenTop = pill.top;
+            sheenBottom = pill.bottom;
+            sheenDark = dark;
+            sheenPaint.setShader(new LinearGradient(0, pill.top, 0, pill.bottom,
+                    Color.argb(dark ? 0x1A : 0x59, 0xFF, 0xFF, 0xFF), Color.TRANSPARENT, Shader.TileMode.CLAMP));
+        }
+        canvas.drawRoundRect(pill, radius, radius, sheenPaint);
+    }
+
+    /** A soft shadow under the pill from three offset round rects, instead of an elevation shadow. */
+    private void drawPaintedShadow(Canvas canvas, float radius) {
+        // The Shadow setting is 0.5 by default.
+        int alpha = Math.round((dark ? 0.10f : 0.05f) * 255 * style.shadow / 0.5f);
+        if (alpha <= 0) return;
+        float step = density;
+        for (int i = 3; i >= 1; i--) {
+            shadowRect.set(pill);
+            shadowRect.inset(-i * 0.5f * step, -i * 0.5f * step);
+            shadowRect.offset(0, i * step);
+            shadowPaint.setColor(Color.argb(Math.min(255, alpha / i), 0, 0, 0));
+            float r = radius + i * 0.5f * step;
+            canvas.drawRoundRect(shadowRect, r, r, shadowPaint);
+        }
+    }
+
+    /**
+     * Records the siblings drawn below the glass around the pill (with room for the blur) over
+     * the base color, into {@link #lightNode}, and draws it. The node only refers to the views'
+     * display lists, so recording is cheap. False if there's nothing to record.
+     */
+    private boolean drawLightBackdrop(Canvas canvas, float blur) {
+        if (!(host.getParent() instanceof ViewGroup)) return false;
+        ViewGroup parent = (ViewGroup) host.getParent();
+        int hostIndex = parent.indexOfChild(host);
+        if (hostIndex <= 0) return false;
+
+        float hostX = host.getLeft() + host.getTranslationX();
+        float hostY = host.getTop() + host.getTranslationY();
+        float margin = (float) Math.ceil(blur);
+        lightArea.set((float) Math.floor(hostX + pill.left - margin), (float) Math.floor(hostY + pill.top - margin),
+                (float) Math.ceil(hostX + pill.right + margin), (float) Math.ceil(hostY + pill.bottom + margin));
+        int w = Math.round(lightArea.width()), h = Math.round(lightArea.height());
+        if (w <= 0 || h <= 0) return false;
+
+        if (lightNode == null) lightNode = new RenderNode("LiquidGlassLight");
+        if (blur != lightBlur) {
+            // Set only when it changes: a new effect makes the GPU redo it.
+            lightBlur = blur;
+            lightNode.setRenderEffect(RenderEffect.createChainEffect(
+                    RenderEffect.createColorFilterEffect(new android.graphics.ColorMatrixColorFilter(FROSTED)),
+                    RenderEffect.createBlurEffect(blur, blur, Shader.TileMode.CLAMP)));
+        }
+        lightNode.setPosition(0, 0, w, h);
+        RecordingCanvas rc = lightNode.beginRecording(w, h);
+        try {
+            // Under the content, which may have no background of its own: blurred text over
+            // nothing would come out mostly clear, with the sharp text showing.
+            rc.drawColor(dark ? Color.BLACK : Color.WHITE);
+            rc.translate(-lightArea.left, -lightArea.top);
+            for (int i = 0; i < hostIndex; i++) {
+                View child = parent.getChildAt(i);
+                if (child.getVisibility() != View.VISIBLE || child.getAlpha() == 0f) continue;
+                if (child instanceof EdgeBlurView || isExcluded(child)) continue;
+                if (!intersects(child, lightArea.left, lightArea.top, w, h)) continue;
+                int save = rc.save();
+                rc.translate(child.getLeft() + child.getTranslationX(), child.getTop() + child.getTranslationY());
+                child.draw(rc);
+                rc.restoreToCount(save);
+            }
+        } finally {
+            lightNode.endRecording();
+        }
+
+        int save = canvas.save();
+        canvas.translate(lightArea.left - hostX, lightArea.top - hostY);
+        canvas.drawRenderNode(lightNode);
+        canvas.restoreToCount(save);
+        return true;
+    }
+
+    // endregion
 
     /**
      * The glass "lit from within" where it's pressed (after Kyant's InteractiveHighlight): a faint

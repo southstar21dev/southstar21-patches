@@ -16,6 +16,8 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewParent;
 
+import app.southstar21.extension.youtubemusic.settings.Settings;
+
 /**
  * A row of glass buttons drawn as one piece of liquid glass, as on iOS: a pressed button swells,
  * leans a little after the finger, stretching along the pull, and springs back when let go,
@@ -237,7 +239,10 @@ final class JellyGlass extends Drawable {
         this.drops = drops;
         this.fallback = new FullPlayerGlass.Glass[drops.length];
         for (int i = 0; i < drops.length; i++) {
-            fallback[i] = new FullPlayerGlass.Glass(FullPlayerGlass.Glass.CIRCLE, 0,
+            // A drop that fills its view (the song/video switch) is a capsule the view's size,
+            // not a circle in its middle.
+            fallback[i] = new FullPlayerGlass.Glass(
+                    drops[i].fit ? FullPlayerGlass.Glass.CAPSULE : FullPlayerGlass.Glass.CIRCLE, 0,
                     drops[i].fill > 0.1f ? FullPlayerGlass.Glass.STRONG_FILL : FullPlayerGlass.Glass.FILL);
         }
     }
@@ -342,6 +347,8 @@ final class JellyGlass extends Drawable {
      * (every frame while the queue sheet moves): then the last drawing is drawn again as is.
      */
     private boolean dirty = true;
+    /** The mode the last frame was drawn in: the liquid node is recorded again after a switch. */
+    private boolean drawnLightweight;
     private int drawnW, drawnH;
     private float drawnX = Float.NaN, drawnY = Float.NaN;
 
@@ -504,7 +511,14 @@ final class JellyGlass extends Drawable {
         }
         ViewGroup c = container;
         if (c == null) return;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && canvas.isHardwareAccelerated()
+        // Lightweight glass: each button its own painted glass circle (they still swell and
+        // follow the finger), no refraction shader.
+        boolean lightweight = Settings.lightweightGlass();
+        if (lightweight != drawnLightweight) {
+            drawnLightweight = lightweight;
+            dirty = true;
+        }
+        if (!lightweight && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && canvas.isHardwareAccelerated()
                 && c.getWidth() > 0 && c.getHeight() > 0) {
             drawLiquid(canvas, c);
             if (decor != null) decor.draw(canvas);
