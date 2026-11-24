@@ -251,6 +251,36 @@ final class JellyGlass extends Drawable {
      * Puts the glass behind {@code container}'s buttons and moves the springs one frame on.
      * Runs every frame the full player shows; cheap when everything is in place.
      */
+    /**
+     * The glass reaches past its row (the drops' shadow below them, the rim's bend): the views
+     * around the row clip each child to its own box, which cut the shadow off in a hard line.
+     * Each one stops clipping, from the row up, until one holds the row with that margin, and
+     * never past the page.
+     */
+    private void unclip(ViewGroup container) {
+        // YouTube Music dims the song/video switch (alpha 0.3) for songs without a video, and a
+        // view with alpha is drawn through a layer cut to its own box, glass margin and all.
+        // Drawn without the layer, each part just takes the alpha.
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N
+                && container.hasOverlappingRendering()) {
+            container.forceHasOverlappingRendering(false);
+        }
+        int pad = (int) Math.ceil(12 * density * 1.1f) + 2;
+        float left = -pad, top = -pad, right = container.getWidth() + pad, bottom = container.getHeight() + pad;
+        View child = container;
+        while (child != page && child.getParent() instanceof ViewGroup) {
+            if (left >= 0 && top >= 0 && right <= child.getWidth() && bottom <= child.getHeight()) return;
+            ViewGroup parent = (ViewGroup) child.getParent();
+            if (parent.getClipChildren()) parent.setClipChildren(false);
+            float dx = child.getLeft() + child.getTranslationX(), dy = child.getTop() + child.getTranslationY();
+            left += dx;
+            right += dx;
+            top += dy;
+            bottom += dy;
+            child = parent;
+        }
+    }
+
     void apply(ViewGroup container, boolean relayout) {
         if (container == null) return;
         if (container != this.container) {
@@ -269,6 +299,7 @@ final class JellyGlass extends Drawable {
         }
         if (relayout) {
             for (Drop d : drops) d.view = d.id == 0 ? null : container.findViewById(d.id);
+            unclip(container);
         }
         boolean changed = false;
         for (Drop d : drops) {
