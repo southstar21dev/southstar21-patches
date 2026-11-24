@@ -47,6 +47,8 @@ final class LiquidGlassController implements ViewTreeObserver.OnPreDrawListener 
     private HeaderBlurController headerBlur;
     /** Frosted strip at the bottom of each reel on the Reels tab. Null when switched off or in a preview. */
     private ReelsBlur reelsBlur;
+    /** Paints the gesture bar strip under open sheets. Null in a preview. */
+    private SheetInsetFill sheetFill;
     /** The DM inbox's Instants stack, kept above the bar. Null in a preview. */
     private FloatingAboveBar instants;
     private final int[] location = new int[2];
@@ -156,6 +158,8 @@ final class LiquidGlassController implements ViewTreeObserver.OnPreDrawListener 
             if (reels.usable()) reelsBlur = reels;
         }
 
+        if (!preview) sheetFill = new SheetInsetFill(bar.getRootView());
+
         if (!preview) {
             instants = new FloatingAboveBar(bar.getRootView(), bar.getResources().getIdentifier(
                     "direct_quick_snap_consumption_preview", "id", "com.instagram.android"));
@@ -253,6 +257,14 @@ final class LiquidGlassController implements ViewTreeObserver.OnPreDrawListener 
                 } catch (Throwable t) {
                     reelsBlur = null;
                     android.util.Log.e(LiquidGlassNavBarPatch.TAG, "Disabling the Reels blur", t);
+                }
+            }
+            if (sheetFill != null) {
+                try {
+                    sheetFill.onPreDraw(contentBehindBar());
+                } catch (Throwable t) {
+                    sheetFill = null;
+                    android.util.Log.e(LiquidGlassNavBarPatch.TAG, "Disabling the sheet inset fill", t);
                 }
             }
             if (bar.getVisibility() == View.VISIBLE && !preview && !solid) {
