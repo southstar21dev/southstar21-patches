@@ -1,3 +1,17 @@
+## [1.4.0-dev.8](https://github.com/southstar21dev/southstar21-patches/compare/v1.4.0-dev.7...v1.4.0-dev.8) (2026-11-24)
+
+### 🐛 Bug Fixes
+
+* **Instagram:** Header glass buttons no longer look dark in light mode ([4acf6eb](https://github.com/southstar21dev/southstar21-patches/commit/4acf6eb21d235b2269c0824ff31f4ba9ca79c6d0))
+* **Instagram:** Reels fill the page from the first frame, and while scrolling ([f0ff225](https://github.com/southstar21dev/southstar21-patches/commit/f0ff22577a40b8b8c89c41bdb611b1956f0588e4))
+* **Instagram:** Reels strip lines up with the video, clearer glass over Reels ([0e27be6](https://github.com/southstar21dev/southstar21-patches/commit/0e27be6230e1ad3f289088de79762435d0404cf6))
+
+### ✨ New Features
+
+* **Instagram:** Clear glass on Reels setting, on by default ([1f5d0ae](https://github.com/southstar21dev/southstar21-patches/commit/1f5d0ae0edc432f23a225479c9cd2c4222e12757))
+* **Instagram:** Frosted strip at the bottom of each reel, like iOS ([e237494](https://github.com/southstar21dev/southstar21-patches/commit/e23749485559c7ddcf1155084483c9228767d14d))
+* **Instagram:** Previews for the Reels settings ([904d006](https://github.com/southstar21dev/southstar21-patches/commit/904d0064c2252b0deccf2c4a0d7750a7291f047f))
+
 ## [1.4.0-dev.7](https://github.com/southstar21dev/southstar21-patches/compare/v1.4.0-dev.6...v1.4.0-dev.7) (2026-11-24)
 
 ### ✨ New Features
