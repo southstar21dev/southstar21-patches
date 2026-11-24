@@ -1,3 +1,9 @@
+## [1.4.0-dev.7](https://github.com/southstar21dev/southstar21-patches/compare/v1.4.0-dev.6...v1.4.0-dev.7) (2026-11-24)
+
+### ✨ New Features
+
+* **Instagram:** White and custom color tints for the navigation bar ([6bc09d3](https://github.com/southstar21dev/southstar21-patches/commit/6bc09d3865786a839785e62c521bc4d7cebd0010)), closes [#16](https://github.com/southstar21dev/southstar21-patches/issues/16)
+
 ## [1.4.0-dev.6](https://github.com/southstar21dev/southstar21-patches/compare/v1.4.0-dev.5...v1.4.0-dev.6) (2026-11-24)
 
 ### 🐛 Bug Fixes
