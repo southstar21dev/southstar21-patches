@@ -254,6 +254,20 @@ final class LiquidGlassDrawable extends Drawable {
         invalidateSelf();
     }
 
+    /**
+     * Over Reels, iOS's bar is much clearer glass than over the feed: the video shows plainly
+     * through it. The tint eases there and back like any other change.
+     */
+    void setOverMedia(boolean overMedia) {
+        if (this.overMedia == overMedia) return;
+        this.overMedia = overMedia;
+        invalidateSelf();
+    }
+
+    private boolean overMedia;
+    /** Over Reels the Opacity setting is scaled down by this much. */
+    private static final float MEDIA_TINT_SCALE = 0.4f;
+
     void setHostColorHint(Integer color) {
         hostColorHint = color;
     }
@@ -276,8 +290,8 @@ final class LiquidGlassDrawable extends Drawable {
         // Measured from iOS Instagram screenshots: the bar is mostly material, ~86% near black
         // in dark mode and ~85% white in light mode, with what's behind it only showing faintly.
         // The Opacity setting is the base (86% by default).
-        float base = style.opacity;
-        if (backdropLuminance < 0f) return base;
+        float base = style.opacity * (overMedia ? MEDIA_TINT_SCALE : 1f);
+        if (backdropLuminance < 0f || overMedia) return base;
         float extra = dark ? 0.06f * smoothstep(0.45f, 0.85f, backdropLuminance)
                 : 0.05f * (1f - smoothstep(0.22f, 0.62f, backdropLuminance));
         return Math.min(1f, base + extra * (1f - base) / 0.14f);

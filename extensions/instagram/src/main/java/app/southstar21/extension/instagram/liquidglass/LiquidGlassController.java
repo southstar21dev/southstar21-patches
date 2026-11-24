@@ -281,6 +281,7 @@ final class LiquidGlassController implements ViewTreeObserver.OnPreDrawListener 
         }
 
         glass.setDark(isDark());
+        glass.setOverMedia(reelsBlurShown());
 
         if (shadow != null && shadow.getAlpha() != 0f) shadow.setAlpha(0f);
 

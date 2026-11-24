@@ -235,6 +235,8 @@ final class ReelsBlur {
         private final Paint[] masks = new Paint[RADII_DP.length];
         private final Paint tint = new Paint();
         private WeakReference<View> video;
+        /** The reel page whose overlay this is (the overlay's own host view is not it). */
+        private WeakReference<View> page;
         /** Instagram's dark gradient at the page bottom, blurred along with the video so the strip matches the page above it. */
         private WeakReference<View> gradient;
         private int maskFor = -1;
@@ -252,6 +254,7 @@ final class ReelsBlur {
 
         void update(View page, View video, View gradient, int height) {
             this.video = video != null ? new WeakReference<>(video) : null;
+            this.page = new WeakReference<>(page);
             this.gradient = gradient != null ? new WeakReference<>(gradient) : null;
             Rect b = getBounds();
             int top = page.getHeight() - height;
@@ -274,7 +277,7 @@ final class ReelsBlur {
             int w = b.width();
             int h = b.height();
             if (video == null || w <= 0 || h <= 0 || !canvas.isHardwareAccelerated()) return;
-            View page = (View) getCallbackView();
+            View page = this.page != null ? this.page.get() : null;
             if (page == null) return;
             updateMasks(h);
 
@@ -290,7 +293,7 @@ final class ReelsBlur {
                 rc.drawColor(Color.BLACK);
                 int base = rc.save();
                 rc.translate(dx, dy);
-                video.draw(rc);
+                drawLayers(rc, video);
                 rc.restoreToCount(base);
                 View gradient = this.gradient != null ? this.gradient.get() : null;
                 if (gradient != null && gradient.getVisibility() == View.VISIBLE && gradient.isAttachedToWindow()) {
@@ -325,9 +328,26 @@ final class ReelsBlur {
             canvas.restoreToCount(save);
         }
 
-        private View getCallbackView() {
-            Callback cb = getCallback();
-            return cb instanceof View ? (View) cb : null;
+        /**
+         * The video layout's layers (player, thumbnails), each placed and zoomed by hand: drawn
+         * through the layout itself, the outgoing reel's zoom went missing mid-scroll and the
+         * strip blurred the black bar below the unzoomed video.
+         */
+        private void drawLayers(Canvas rc, View video) {
+            if (!(video instanceof ViewGroup)) {
+                video.draw(rc);
+                return;
+            }
+            ViewGroup layout = (ViewGroup) video;
+            for (int i = 0; i < layout.getChildCount(); i++) {
+                View layer = layout.getChildAt(i);
+                if (layer.getVisibility() != View.VISIBLE || layer.getAlpha() == 0f) continue;
+                int save = rc.save();
+                rc.translate(layer.getLeft() + layer.getTranslationX(), layer.getTop() + layer.getTranslationY());
+                rc.scale(layer.getScaleX(), layer.getScaleY(), layer.getPivotX(), layer.getPivotY());
+                layer.draw(rc);
+                rc.restoreToCount(save);
+            }
         }
 
         private void updateMasks(int h) {
