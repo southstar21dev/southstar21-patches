@@ -45,6 +45,8 @@ final class LiquidGlassController implements ViewTreeObserver.OnPreDrawListener 
     private EdgeBlurView bottomBlur;
     /** Progressive blur under the Home and Explore headers. Null when switched off or in a preview. */
     private HeaderBlurController headerBlur;
+    /** Frosted strip at the bottom of each reel on the Reels tab. Null when switched off or in a preview. */
+    private ReelsBlur reelsBlur;
     /** The DM inbox's Instants stack, kept above the bar. Null in a preview. */
     private FloatingAboveBar instants;
     private final int[] location = new int[2];
@@ -70,6 +72,8 @@ final class LiquidGlassController implements ViewTreeObserver.OnPreDrawListener 
     private View lastTab;
     /** After a page switch, the videos under the bar aren't copied for this long. */
     private static final long SWITCH_COPY_PAUSE_MS = 300;
+    /** How far above the pill the Reels strip (and the caption's bottom) starts, like iOS. */
+    private static final int REELS_STRIP_ABOVE_PILL_DP = 26;
 
     LiquidGlassController(ViewGroup bar, View shadow, boolean extendContent) {
         this(bar, shadow, extendContent, NavbarStyle::get);
@@ -144,6 +148,12 @@ final class LiquidGlassController implements ViewTreeObserver.OnPreDrawListener 
         if (!preview && LiquidGlassNavBarPatch.effect(LiquidGlassNavBarPatch.HEADER_BLUR)) {
             headerBlur = new HeaderBlurController(bar.getRootView(), density,
                     LiquidGlassNavBarPatch.effect(LiquidGlassNavBarPatch.GLASS_HEADER_BUTTONS));
+        }
+
+        if (!preview && LiquidGlassNavBarPatch.effect(LiquidGlassNavBarPatch.REELS_BLUR)
+                && LiquidGlassNavBarPatch.BLUR_VIDEOS.get()) {
+            ReelsBlur reels = new ReelsBlur(bar.getRootView(), density);
+            if (reels.usable()) reelsBlur = reels;
         }
 
         if (!preview) {
@@ -231,6 +241,20 @@ final class LiquidGlassController implements ViewTreeObserver.OnPreDrawListener 
                     android.util.Log.e(LiquidGlassNavBarPatch.TAG, "Disabling the header blur", t);
                 }
             }
+            if (reelsBlur != null) {
+                try {
+                    boolean on = !solid && isBarShown() && isReelsSelected();
+                    ViewGroup parent = (ViewGroup) bar.getParent();
+                    parent.getLocationInWindow(location);
+                    // A little above the pill, from its layout position: the bar shrinking while
+                    // scrolling mustn't move the strip or the caption above it.
+                    int stripTop = location[1] + bar.getTop() + Math.round(glass.getPill().top) - dp(REELS_STRIP_ABOVE_PILL_DP);
+                    reelsBlur.onPreDraw(on, stripTop);
+                } catch (Throwable t) {
+                    reelsBlur = null;
+                    android.util.Log.e(LiquidGlassNavBarPatch.TAG, "Disabling the Reels blur", t);
+                }
+            }
             if (bar.getVisibility() == View.VISIBLE && !preview && !solid) {
                 glass.getPill().round(sampleRect);
                 sampler.maybeSample(sampleRect, dp(20));
@@ -257,6 +281,8 @@ final class LiquidGlassController implements ViewTreeObserver.OnPreDrawListener 
         }
 
         glass.setDark(isDark());
+        glass.setOverMedia(previewOverMedia != null ? previewOverMedia
+                : reelsBlurShown() && LiquidGlassNavBarPatch.REELS_CLEAR_GLASS.get());
 
         if (shadow != null && shadow.getAlpha() != 0f) shadow.setAlpha(0f);
 
@@ -329,7 +355,8 @@ final class LiquidGlassController implements ViewTreeObserver.OnPreDrawListener 
         bottomBlur.setDark(dark);
         // A solid bar has no glass, and no blur along the bottom either.
         NavbarStyle style = styleSource.get();
-        setShown(bottomBlur, barShown && !style.solid && !style.demoVideoHole);
+        // On Reels each reel brings its own strip, which scrolls with it.
+        setShown(bottomBlur, barShown && !style.solid && !style.demoVideoHole && !reelsBlurShown());
     }
 
     private static void setShown(View v, boolean shown) {
@@ -362,6 +389,13 @@ final class LiquidGlassController implements ViewTreeObserver.OnPreDrawListener 
         if (bg == null || bg == glass) return;
         glass.setHostColorHint(bg instanceof ColorDrawable ? ((ColorDrawable) bg).getColor() : null);
     }
+
+    /** Clearer glass over Reels or not, for the settings preview; null to follow Instagram. */
+    void forceOverMedia(Boolean overMedia) {
+        previewOverMedia = overMedia;
+    }
+
+    private Boolean previewOverMedia;
 
     /** Light or dark regardless of Instagram, for the settings preview; null to follow Instagram. */
     void forceDark(Boolean dark) {
@@ -462,7 +496,12 @@ final class LiquidGlassController implements ViewTreeObserver.OnPreDrawListener 
      * end up behind the pill. Everywhere else content scrolls underneath the glass.
      */
     private boolean contentBehindBar() {
-        return extendContent && !isReelsSelected();
+        return extendContent && (!isReelsSelected() || reelsBlurShown());
+    }
+
+    /** Reels runs behind the bar with a frosted strip per reel (see ReelsBlur). */
+    private boolean reelsBlurShown() {
+        return reelsBlur != null && !styleSource.get().solid && isReelsSelected();
     }
 
     /** False while Instagram hides the bar (gone, collapsed or slid off screen). */
