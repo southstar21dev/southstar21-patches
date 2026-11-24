@@ -41,12 +41,16 @@ final class NavbarStyle {
             0, 100, "%", () -> 50)
             .help("The soft shadow the bar casts on the feed under it.");
 
+    // Stored by index: add new options at the end so a saved choice keeps its color.
     private static final int[] TINT_COLORS = {
-            0, 0xFF0A84FF, 0xFFBF5AF2, 0xFFFF375F, 0xFFFF9F0A, 0xFF30D158, 0xFF40C8E0};
+            0, 0xFF0A84FF, 0xFFBF5AF2, 0xFFFF375F, 0xFFFF9F0A, 0xFF30D158, 0xFF40C8E0, 0xFFFFFFFF,
+            ChoiceSetting.CUSTOM_COLOR};
     static final ChoiceSetting TINT = new ChoiceSetting("liquid_glass_tint",
             "Tint", "A color mixed into the glass.", false,
-            new String[]{"None", "Blue", "Purple", "Pink", "Orange", "Green", "Teal"}, TINT_COLORS, 0)
-            .help("Mixes a color into the glass: subtle in light mode, stronger in dark mode.");
+            new String[]{"None", "Blue", "Purple", "Pink", "Orange", "Green", "Teal", "White", "Custom"},
+            TINT_COLORS, 0, 0xFF5E5CE6)
+            .help("Mixes a color into the glass: subtle in light mode, stronger in dark mode. White frosts "
+                    + "the bar a lighter grey in dark mode. The last swatch opens a color wheel to pick any color.");
 
     static final IntSetting HEIGHT = new IntSetting("liquid_glass_height",
             "Height", "How tall the bar is.", false,
@@ -172,7 +176,11 @@ final class NavbarStyle {
         shadow = i(SHADOW) / 100f;
         Integer tintOverride = overrides != null ? overrides.get(TINT.key) : null;
         int tintIndex = tintOverride != null ? tintOverride : TINT.get();
-        tint = TINT_COLORS[Math.max(0, Math.min(TINT_COLORS.length - 1, tintIndex))];
+        tintIndex = Math.max(0, Math.min(TINT_COLORS.length - 1, tintIndex));
+        Integer customOverride = overrides != null ? overrides.get(TINT.customKey()) : null;
+        tint = TINT.isCustom(tintIndex)
+                ? (customOverride != null ? customOverride | 0xFF000000 : TINT.getCustomColor())
+                : TINT_COLORS[tintIndex];
         heightDp = i(HEIGHT);
         sideMarginDp = i(SIDE_MARGIN);
         bottomGapDp = i(BOTTOM_GAP);
