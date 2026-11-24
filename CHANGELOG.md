@@ -1,3 +1,14 @@
+## [1.4.0-dev.6](https://github.com/southstar21dev/southstar21-patches/compare/v1.4.0-dev.5...v1.4.0-dev.6) (2026-11-24)
+
+### 🐛 Bug Fixes
+
+* **YouTube Music:** Full Liquid Glass button shadows no longer cut off ([4d7c603](https://github.com/southstar21dev/southstar21-patches/commit/4d7c603dd2f81404358935e5d54362b338c410f0))
+
+### ✨ New Features
+
+* **YouTube Music:** Disable dynamic player color and Hide Ask Music button patches ([2a37986](https://github.com/southstar21dev/southstar21-patches/commit/2a37986d6e53821071cad249e8cb6ae22a274a78))
+* **YouTube Music:** Lightweight glass by default and a settings menu ([b27f1ef](https://github.com/southstar21dev/southstar21-patches/commit/b27f1efcd28156094e2a6745a8285cdf280e70a0))
+
 ## [1.4.0-dev.5](https://github.com/southstar21dev/southstar21-patches/compare/v1.4.0-dev.4...v1.4.0-dev.5) (2026-11-23)
 
 ### 🐛 Bug Fixes

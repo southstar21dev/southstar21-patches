@@ -64,7 +64,7 @@ Patching YouTube Music without GmsCore support stops with a message saying so, r
 ## Patches
 
 <!-- PATCHES_START EXPANDED -->
-> **[v1.4.0-dev.5](https://github.com/southstar21dev/southstar21-patches/releases/tag/v1.4.0-dev.5)**&nbsp;&nbsp;•&nbsp;&nbsp;`dev`&nbsp;&nbsp;•&nbsp;&nbsp;10 patches total
+> **[v1.4.0-dev.6](https://github.com/southstar21dev/southstar21-patches/releases/tag/v1.4.0-dev.6)**&nbsp;&nbsp;•&nbsp;&nbsp;`dev`&nbsp;&nbsp;•&nbsp;&nbsp;12 patches total
 <details open>
 <summary>📦 Instagram&nbsp;&nbsp;•&nbsp;&nbsp;8 patches</summary>
 <br>
@@ -88,22 +88,7 @@ Patching YouTube Music without GmsCore support stops with a message saying so, r
 </details>
 
 <details open>
-<summary>📦 Spotify&nbsp;&nbsp;•&nbsp;&nbsp;1 patch</summary>
-<br>
-
-**🎯 Supported versions:**
-
-| 9.2.0.2053 |
-| :---: |
-
-| 💊&nbsp;Patch | 📜&nbsp;Description | ⚙️&nbsp;Options |
-|----------|----------------|-----------|
-| [Liquid Glass navigation bar](#liquid-glass-navigation-bar-spotify) | Turns the bottom tab bar and the mini player above it into floating iOS 26 style Liquid Glass with live background blur and edge refraction, and colors the selected tab Spotify green. Refraction needs Android 13+, blur needs Android 12+, older versions get a tinted pill. | • Blur radius<br>• Refraction strength<br>• southstar21 style |
-
-</details>
-
-<details open>
-<summary>📦 YouTube Music&nbsp;&nbsp;•&nbsp;&nbsp;1 patch</summary>
+<summary>📦 YouTube Music&nbsp;&nbsp;•&nbsp;&nbsp;3 patches</summary>
 <br>
 
 **🎯 Supported versions:**
@@ -115,7 +100,22 @@ Patching YouTube Music without GmsCore support stops with a message saying so, r
 |----------|----------------|-----------|
 | [Disable dynamic player color](#disable-dynamic-player-color) | Keeps the full player's background one neutral color instead of changing with each song's album art. Switch it on and pick the color (YouTube Music's default, black or dark grey) in the southstar21 Patches menu in the top bar. Requires Morphe Patches with GmsCore support, applied together in Expert mode. |  |
 | [Hide Ask Music button](#hide-ask-music-button) | Removes the Ask Music AI assistant button (the sparkle) from the top bar, the full player, the mini player, the video's fullscreen controls and the search bar, with its banner. It can be switched off again in the southstar21 Patches menu in the top bar. Requires Morphe Patches with GmsCore support, applied together in Expert mode. |  |
-| [Liquid Glass navigation bar](#liquid-glass-navigation-bar-youtube-music) | Turns the bottom tab bar into floating iOS 26 style Liquid Glass with live background blur and edge refraction, with the mini player docked beside it as round album art with a progress ring, a glass playback bar above, and the content scrolling on behind them. Lightweight glass (the default, switchable to the full effect in the in-app menu) blurs on Android 14+ and gets a solid pill before that; the full effect adds refraction on Android 13+ and blur on Android 12+. Requires Morphe Patches with GmsCore support, applied together in Expert mode. | • Blur radius<br>• Refraction strength<br>• southstar21 style |
+| [Liquid Glass navigation bar](#liquid-glass-navigation-bar-youtube-music) | Turns the bottom tab bar into floating iOS 26 style Liquid Glass with live background blur and edge refraction, with the mini player docked beside it as round album art with a progress ring, a glass playback bar above, and the content scrolling on behind them. Lightweight glass (the default, switchable to the full effect in the southstar21 Patches menu in the top bar) blurs on Android 14+ and gets a solid pill before that; the full effect adds refraction on Android 13+ and blur on Android 12+. Requires Morphe Patches with GmsCore support, applied together in Expert mode. | • Blur radius<br>• Refraction strength<br>• southstar21 style |
+
+</details>
+
+<details open>
+<summary>📦 Spotify&nbsp;&nbsp;•&nbsp;&nbsp;1 patch</summary>
+<br>
+
+**🎯 Supported versions:**
+
+| 9.2.0.2053 |
+| :---: |
+
+| 💊&nbsp;Patch | 📜&nbsp;Description | ⚙️&nbsp;Options |
+|----------|----------------|-----------|
+| [Liquid Glass navigation bar](#liquid-glass-navigation-bar-spotify) | Turns the bottom tab bar and the mini player above it into floating iOS 26 style Liquid Glass with live background blur and edge refraction, and colors the selected tab Spotify green. Refraction needs Android 13+, blur needs Android 12+, older versions get a tinted pill. | • Blur radius<br>• Refraction strength<br>• southstar21 style |
 
 </details>
 
