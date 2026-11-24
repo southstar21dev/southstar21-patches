@@ -1,3 +1,10 @@
+## [1.4.1-dev.1](https://github.com/southstar21dev/southstar21-patches/compare/v1.4.0...v1.4.1-dev.1) (2026-11-24)
+
+### 🐛 Bug Fixes
+
+* **Instagram:** Reels strip no longer hides the caption and seek bar ([679300b](https://github.com/southstar21dev/southstar21-patches/commit/679300b21d61d524fcf6d1826d911b2f313b9bfb))
+* **Instagram:** Sheets cover the gesture bar strip over pages behind the bar ([4182b63](https://github.com/southstar21dev/southstar21-patches/commit/4182b63051d4d8e625507a811478a441cddfd3a0))
+
 ## [1.4.0](https://github.com/southstar21dev/southstar21-patches/compare/v1.3.0...v1.4.0) (2026-11-24)
 
 ### 🐛 Bug Fixes
