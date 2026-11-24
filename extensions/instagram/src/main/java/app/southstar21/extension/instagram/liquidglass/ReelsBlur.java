@@ -31,11 +31,11 @@ import java.util.WeakHashMap;
  * reel, not the screen, so it slides away with the reel while scrolling and the next reel comes
  * in sharp.
  * <p>
- * Each page of the Reels pager gets a {@link Strip} in its overlay (drawn over the page, moving
- * with it, outside Instagram's layout). It re-records the page's video layout each frame,
- * blurred together with Instagram's legibility gradient, so the strip is as dark as the page right
- * above it and the two meet without a seam. The caption and the button column are lifted by the
- * strip's height, so they still end above it.
+ * Each page's video layout gets a {@link Strip} in its overlay: drawn over the video but under
+ * all of Instagram's UI (caption, buttons, seek bar, legibility gradient), so it can't cover any
+ * of it, and moving with the page. It re-records the video each frame; Instagram's gradient then
+ * darkens strip and page alike, so the two meet without a seam. The caption, the button column
+ * and the seek bar are lifted together, just as far as it takes for them to end above the strip.
  * <p>
  * Needs the TextureView player (Blur videos): a SurfaceView is a layer of its own that can't be
  * recorded.
@@ -54,7 +54,7 @@ final class ReelsBlur {
 
     private final View root;
     private final float density;
-    private final int pagerId, videoId, containerId, infoId, gradientId;
+    private final int pagerId, videoId, containerId, infoId, scrubberId;
     /** Portrait videos up to this much shorter than the page are zoomed to fill it (wider ones keep their bars). */
     private static final float MAX_FILL_SCALE = 1.25f;
     /** Videos at least this tall for their width (9:16 is 1.78) count as portrait. */
@@ -63,8 +63,10 @@ final class ReelsBlur {
     private WeakReference<ViewGroup> pager;
     private long lastScan;
     private final WeakHashMap<View, Strip> strips = new WeakHashMap<>();
-    /** Views lifted above the strip, put back when the effect stops. */
+    /** Views scrolled to lift what they hold above the strip, put back when the effect stops. */
     private final WeakHashMap<View, Boolean> lifted = new WeakHashMap<>();
+    /** Seek bar hosts moved up above the strip, put back when the effect stops. */
+    private final WeakHashMap<View, Boolean> shifted = new WeakHashMap<>();
     /** Video containers zoomed to fill their page, put back when the effect stops. */
     private final WeakHashMap<View, Boolean> filled = new WeakHashMap<>();
     private final int[] location = new int[2];
@@ -84,7 +86,7 @@ final class ReelsBlur {
         videoId = res.getIdentifier("clips_viewer_video_layout", "id", PKG);
         containerId = res.getIdentifier("clips_video_container", "id", PKG);
         infoId = res.getIdentifier("clips_media_info_component", "id", PKG);
-        gradientId = res.getIdentifier("clips_bottom_legibility_gradient_component", "id", PKG);
+        scrubberId = res.getIdentifier("scrubber", "id", PKG);
     }
 
     /** Whether the ids it needs exist in this Instagram build. */
@@ -118,16 +120,18 @@ final class ReelsBlur {
         for (int i = 0; i < list.getChildCount(); i++) {
             View page = list.getChildAt(i);
             if (!(page instanceof ViewGroup)) continue;
-            Strip strip = strips.get(page);
-            if (strip == null) {
-                strip = new Strip();
-                strips.put(page, strip);
-                page.getOverlay().add(strip);
-            }
             View video = page.findViewById(videoId);
-            fill(video);
-            strip.update(page, video, gradientId != 0 ? page.findViewById(gradientId) : null, height);
-            lift(page, infoId, height);
+            if (video != null) {
+                Strip strip = strips.get(video);
+                if (strip == null) {
+                    strip = new Strip();
+                    strips.put(video, strip);
+                    video.getOverlay().add(strip);
+                }
+                fill(video);
+                strip.update(page, video, height);
+            }
+            lift(page, page.getHeight() - height);
         }
     }
 
@@ -165,24 +169,95 @@ final class ReelsBlur {
         }
     }
 
-    /** Lifts the parent of {@code id} (the host it sits in with its siblings) by {@code by}. */
-    private void lift(View page, int id, int by) {
-        if (id == 0) return;
-        View found = page.findViewById(id);
-        if (found == null) return;
-        View host = found.getParent() instanceof View ? (View) found.getParent() : found;
-        if (host == page) return;
-        if (host.getTranslationY() != -by) host.setTranslationY(-by);
-        lifted.put(host, Boolean.TRUE);
+    /**
+     * Lifts the caption block (the host of the caption, the button column and any row Instagram
+     * adds under them) and the seek bar together, by just enough for the lowest of them to end at
+     * {@code stripTop} (page coordinates). Instagram lays some reels out with room to spare (a
+     * "Not interested" row, no seek bar), so a fixed lift would push those far too high.
+     * <p>
+     * The hosts are scrolled, not translated: Litho animates rows (expanding the description)
+     * by their position relative to the LithoView, which counts the ancestors' translation but
+     * not their scroll. A translated host left the animated rows pushed back down by the lift,
+     * out of the host's bounds and out of sight.
+     */
+    private void lift(View page, int stripTop) {
+        page.getLocationInWindow(other);
+        int lowest = Integer.MIN_VALUE;
+
+        View info = infoId != 0 ? page.findViewById(infoId) : null;
+        View infoHost = info != null && info.getParent() instanceof View && info.getParent() != page
+                ? (View) info.getParent() : null;
+        if (infoHost != null) {
+            int bottom = contentBottom(infoHost);
+            if (bottom != Integer.MIN_VALUE) {
+                // A view's own scroll doesn't move it, only what it holds.
+                infoHost.getLocationInWindow(location);
+                lowest = location[1] - other[1] + bottom;
+            }
+        }
+
+        View scrubber = scrubberId != 0 ? page.findViewById(scrubberId) : null;
+        View scrubberHost = scrubber != null ? pageLevel(scrubber, page) : null;
+        if (scrubberHost != null && scrubber.isShown() && scrubber.getHeight() > 0) {
+            scrubber.getLocationInWindow(location);
+            int bottom = location[1] - other[1] + scrubber.getHeight() - Math.round(scrubberHost.getTranslationY());
+            lowest = Math.max(lowest, bottom);
+        }
+
+        int by = lowest == Integer.MIN_VALUE ? 0 : Math.max(0, lowest - stripTop);
+        if (infoHost != null) {
+            if (infoHost.getScrollY() != by) infoHost.setScrollY(by);
+            lifted.put(infoHost, Boolean.TRUE);
+        }
+        // The seek bar sits in frames barely taller than itself (scrolling them would clip it),
+        // so its page-sized host is moved instead. Nothing in it is animated by Litho.
+        if (scrubberHost != null) {
+            if (scrubberHost.getTranslationY() != -by) scrubberHost.setTranslationY(-by);
+            shifted.put(scrubberHost, Boolean.TRUE);
+        }
+    }
+
+    /**
+     * The ancestor of {@code view} sitting in a page-sized container (or the page), which can be
+     * moved up without being clipped. Null if there is none.
+     */
+    private static View pageLevel(View view, View page) {
+        View v = view;
+        while (v.getParent() instanceof View && v.getParent() != page) {
+            View parent = (View) v.getParent();
+            if (parent.getHeight() >= page.getHeight()) return v;
+            v = parent;
+        }
+        return v.getParent() == page ? v : null;
+    }
+
+    /**
+     * The bottom of what {@code host} shows, in its own coordinates: its lowest visible child
+     * with a size (Litho keeps empty spacers at the bottom).
+     */
+    private static int contentBottom(View host) {
+        if (!(host instanceof ViewGroup)) return host.getHeight();
+        ViewGroup g = (ViewGroup) host;
+        int bottom = Integer.MIN_VALUE;
+        for (int i = 0; i < g.getChildCount(); i++) {
+            View c = g.getChildAt(i);
+            if (c.getVisibility() != View.VISIBLE || c.getHeight() == 0 || c.getWidth() == 0) continue;
+            bottom = Math.max(bottom, c.getBottom());
+        }
+        return bottom;
     }
 
     private void stop() {
         if (!active) return;
         active = false;
         for (View v : lifted.keySet()) {
-            if (v != null) v.setTranslationY(0f);
+            if (v != null) v.setScrollY(0);
         }
         lifted.clear();
+        for (View v : shifted.keySet()) {
+            if (v != null) v.setTranslationY(0f);
+        }
+        shifted.clear();
         for (View v : filled.keySet()) {
             if (v != null) {
                 v.setScaleX(1f);
@@ -228,17 +303,13 @@ final class ReelsBlur {
         }
     }
 
-    /** A page's frosted bottom strip, drawn in its overlay. */
+    /** A page's frosted bottom strip, drawn in its video layout's overlay. */
     private final class Strip extends Drawable {
         private final RenderNode backdrop = new RenderNode("ReelsBlurBackdrop");
         private final RenderNode[] levels = new RenderNode[RADII_DP.length];
         private final Paint[] masks = new Paint[RADII_DP.length];
         private final Paint tint = new Paint();
         private WeakReference<View> video;
-        /** The reel page whose overlay this is (the overlay's own host view is not it). */
-        private WeakReference<View> page;
-        /** Instagram's dark gradient at the page bottom, blurred along with the video so the strip matches the page above it. */
-        private WeakReference<View> gradient;
         private int maskFor = -1;
         private final int pad = Math.round(PAD_DP * density);
 
@@ -252,14 +323,16 @@ final class ReelsBlur {
             }
         }
 
-        void update(View page, View video, View gradient, int height) {
-            this.video = video != null ? new WeakReference<>(video) : null;
-            this.page = new WeakReference<>(page);
-            this.gradient = gradient != null ? new WeakReference<>(gradient) : null;
+        void update(View page, View video, int height) {
+            this.video = new WeakReference<>(video);
+            // The page's bottom `height`, in the video layout's coordinates.
+            video.getLocationInWindow(location);
+            page.getLocationInWindow(other);
+            int bottom = other[1] + page.getHeight() - location[1];
+            int top = bottom - height;
             Rect b = getBounds();
-            int top = page.getHeight() - height;
-            if (b.left != 0 || b.top != top || b.right != page.getWidth() || b.bottom != page.getHeight()) {
-                setBounds(0, top, page.getWidth(), page.getHeight());
+            if (b.left != 0 || b.top != top || b.right != video.getWidth() || b.bottom != bottom) {
+                setBounds(0, top, video.getWidth(), bottom);
             }
             // The video changes every frame without the page knowing: record it again.
             if (video != null && page.getGlobalVisibleRect(visible)) invalidateSelf();
@@ -277,30 +350,16 @@ final class ReelsBlur {
             int w = b.width();
             int h = b.height();
             if (video == null || w <= 0 || h <= 0 || !canvas.isHardwareAccelerated()) return;
-            View page = this.page != null ? this.page.get() : null;
-            if (page == null) return;
             updateMasks(h);
 
             // The video layout, in the strip's coordinates, from `pad` above the strip down.
             int rh = h + pad;
-            video.getLocationInWindow(location);
-            page.getLocationInWindow(other);
-            float dx = location[0] - other[0];
-            float dy = location[1] - other[1] - (b.top - pad);
             backdrop.setPosition(0, 0, w, rh);
             RecordingCanvas rc = backdrop.beginRecording(w, rh);
             try {
                 rc.drawColor(Color.BLACK);
-                int base = rc.save();
-                rc.translate(dx, dy);
+                rc.translate(0, -(b.top - pad));
                 drawLayers(rc, video);
-                rc.restoreToCount(base);
-                View gradient = this.gradient != null ? this.gradient.get() : null;
-                if (gradient != null && gradient.getVisibility() == View.VISIBLE && gradient.isAttachedToWindow()) {
-                    gradient.getLocationInWindow(location);
-                    rc.translate(location[0] - other[0], location[1] - other[1] - (b.top - pad));
-                    gradient.draw(rc);
-                }
             } finally {
                 backdrop.endRecording();
             }
