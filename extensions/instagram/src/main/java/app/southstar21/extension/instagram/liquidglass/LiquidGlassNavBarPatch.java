@@ -128,6 +128,12 @@ public final class LiquidGlassNavBarPatch {
                     + "glass with the feed blurred behind it, reaching down to the bottom of the screen. Its "
                     + "search field and the grey share buttons (Add to story, Copy link and the rest) get "
                     + "glass too. Other menus stay as they are. Takes effect the next time you open the menu.");
+    static final BooleanSetting GLASS_COMMENTS = new BooleanSetting("liquid_glass_comments",
+            "Glass comments", "The comments become a sheet of frosted glass, like the share menu.", false, false)
+            .help("The comments that open from the speech bubble on a reel or a post become a sheet of "
+                    + "frosted glass with the reel or the feed blurred behind it, reaching down to the bottom "
+                    + "of the screen, like the share menu. The field you type a comment in gets glass too. "
+                    + "Takes effect the next time you open the comments.");
     static final BooleanSetting SWITCH_AFTER_GLIDE = new BooleanSetting("liquid_glass_switch_after_glide",
             "Switch after the glide", "A tapped tab opens once the selection has glided to it, so the "
             + "page switch doesn't stutter the glide.", false, true)
@@ -183,25 +189,25 @@ public final class LiquidGlassNavBarPatch {
                     + "how anything works.");
 
     /**
-     * The glass beyond the tab bar: the header and the share menu. Its own entry in the menu, but
+     * The glass beyond the tab bar: the header, Reels and the sheets. Its own entry in the menu, but
      * part of the same patch, and it works together with the navigation bar.
      */
     public static final PatchSettings EFFECTS = new PatchSettings("glass_effects",
             "Liquid Glass",
-            "iOS 26 style glass on the header, Reels and the share menu.",
+            "iOS 26 style glass on the header, Reels, the share menu and comments.",
             LiquidGlassNavBarPatch::isIncluded,
             new SettingsGroup("Header", "Works together with the navigation bar, which needs to be on.",
                     HEADER_BLUR, GLASS_HEADER_BUTTONS.shownWhen(HEADER_BLUR)),
             new SettingsGroup("Reels", REELS_BLUR, REELS_CLEAR_GLASS.shownWhen(REELS_BLUR)),
-            new SettingsGroup("Menus", GLASS_SHARE_MENU))
+            new SettingsGroup("Sheets", GLASS_SHARE_MENU, GLASS_COMMENTS))
             .demos(NavbarPreview::demo)
             .icon(Icons.Glyph.DROP, 0xFF32ADE6)
             .about("Brings iOS 26's glass to more of Instagram. On Home and Explore the feed runs on under the "
                     + "header and the status bar and is blurred towards the top of the screen, and the "
                     + "header's buttons get round pieces of glass once you scroll. On Reels each reel runs "
                     + "behind the bar with a frosted strip under its caption that scrolls with it, and the "
-                    + "bar turns to clearer glass. The share menu becomes a "
-                    + "sheet of frosted glass.",
+                    + "bar turns to clearer glass. The share menu, and if you like the comments, become "
+                    + "sheets of frosted glass.",
                     "It's a look, like the navigation bar's. It doesn't change how anything works.");
 
     /** Whether one of the {@link #EFFECTS} is switched on, with the entry itself on. */
