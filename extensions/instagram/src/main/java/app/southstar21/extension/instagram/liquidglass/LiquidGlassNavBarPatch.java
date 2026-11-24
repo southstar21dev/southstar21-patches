@@ -81,6 +81,13 @@ public final class LiquidGlassNavBarPatch {
             .help("On iOS 26 the buttons in the Home and Explore headers (new post, notifications, saved, "
                     + "more) blend into the header at the top of the feed and get round pieces of glass once "
                     + "it scrolls. Takes effect after Instagram restarts.");
+    static final BooleanSetting REELS_BLUR = new BooleanSetting("liquid_glass_reels_blur",
+            "Blur under Reels", "Reels run behind the bar, with a frosted strip under the caption that "
+            + "scrolls with each reel.", true, true)
+            .help("Like on iOS 26: on the Reels tab each reel reaches down behind the bar, and the strip of "
+                    + "it under the caption is a frosted copy of the video. The strip is part of the reel, so "
+                    + "it slides away with it while you scroll. Needs the liquid glass bar and Blur videos "
+                    + "behind the bar. Takes effect after Instagram restarts.");
     /** The bar's style, picked with the two cards on its page: a solid pill, or liquid glass. */
     static final BooleanSetting SOLID = new BooleanSetting("liquid_glass_solid",
             "Solid", "A plain floating bar: by far the lightest, recommended for older phones.", false,
@@ -179,6 +186,7 @@ public final class LiquidGlassNavBarPatch {
             LiquidGlassNavBarPatch::isIncluded,
             new SettingsGroup("Header", "Works together with the navigation bar, which needs to be on.",
                     HEADER_BLUR, GLASS_HEADER_BUTTONS.shownWhen(HEADER_BLUR)),
+            new SettingsGroup("Reels", REELS_BLUR),
             new SettingsGroup("Menus", GLASS_SHARE_MENU))
             .demos(NavbarPreview::demo)
             .icon(Icons.Glyph.DROP, 0xFF32ADE6)
