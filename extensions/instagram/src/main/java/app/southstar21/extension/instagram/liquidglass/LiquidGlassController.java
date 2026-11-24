@@ -281,7 +281,8 @@ final class LiquidGlassController implements ViewTreeObserver.OnPreDrawListener 
         }
 
         glass.setDark(isDark());
-        glass.setOverMedia(reelsBlurShown() && LiquidGlassNavBarPatch.REELS_CLEAR_GLASS.get());
+        glass.setOverMedia(previewOverMedia != null ? previewOverMedia
+                : reelsBlurShown() && LiquidGlassNavBarPatch.REELS_CLEAR_GLASS.get());
 
         if (shadow != null && shadow.getAlpha() != 0f) shadow.setAlpha(0f);
 
@@ -388,6 +389,13 @@ final class LiquidGlassController implements ViewTreeObserver.OnPreDrawListener 
         if (bg == null || bg == glass) return;
         glass.setHostColorHint(bg instanceof ColorDrawable ? ((ColorDrawable) bg).getColor() : null);
     }
+
+    /** Clearer glass over Reels or not, for the settings preview; null to follow Instagram. */
+    void forceOverMedia(Boolean overMedia) {
+        previewOverMedia = overMedia;
+    }
+
+    private Boolean previewOverMedia;
 
     /** Light or dark regardless of Instagram, for the settings preview; null to follow Instagram. */
     void forceDark(Boolean dark) {
