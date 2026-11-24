@@ -71,6 +71,10 @@ final class ReelsBlur {
     private final int[] other = new int[2];
     private final Rect visible = new Rect();
     private boolean active;
+    private boolean wasOn;
+    /** Until then (uptime ms) the pager is looked for every frame: Reels just came up. */
+    private long searchUntil;
+    private static final long EAGER_SEARCH_MS = 1500;
 
     ReelsBlur(View root, float density) {
         this.root = root;
@@ -95,6 +99,8 @@ final class ReelsBlur {
      * @param stripTop  where the strip starts, in window coordinates (just above the pill)
      */
     void onPreDraw(boolean on, int stripTop) {
+        if (on && !wasOn) searchUntil = SystemClock.uptimeMillis() + EAGER_SEARCH_MS;
+        wasOn = on;
         ViewGroup pager = on ? pager() : null;
         if (pager == null || pager.getChildCount() == 0 || !(pager.getChildAt(0) instanceof ViewGroup)) {
             stop();
@@ -129,26 +135,34 @@ final class ReelsBlur {
      * Instagram fits a 9:16 reel into the page, which now runs on behind the bar, so it got
      * black bars above and below. Zoom it to fill the page instead, cropping its sides, as
      * Instagram already did (a little) when the page stopped above the bar, and as iOS does.
+     * <p>
+     * Every layer of the video layout is zoomed, not just the player: Instagram moves its one
+     * player to the incoming reel mid-scroll and shows a thumbnail in the outgoing one, which
+     * would otherwise bring its black bars back (into the strip, too).
      */
     private void fill(View video) {
-        if (video == null || containerId == 0) return;
-        View container = video.findViewById(containerId);
-        if (container == null) return;
-        int w = container.getWidth();
-        int h = container.getHeight();
-        int pageH = video.getHeight();
-        float scale = 1f;
-        if (w > 0 && h > 0 && pageH > h && h / (float) w >= PORTRAIT_RATIO) {
-            float want = pageH / (float) h;
-            if (want <= MAX_FILL_SCALE) scale = want;
+        if (!(video instanceof ViewGroup)) return;
+        ViewGroup layout = (ViewGroup) video;
+        int pageH = layout.getHeight();
+        for (int i = 0; i < layout.getChildCount(); i++) {
+            View layer = layout.getChildAt(i);
+            int w = layer.getWidth();
+            int h = layer.getHeight();
+            float scale = 1f;
+            if (layer.getVisibility() != View.GONE && w > 0 && h > 0 && pageH > h
+                    && h / (float) w >= PORTRAIT_RATIO) {
+                float want = pageH / (float) h;
+                if (want <= MAX_FILL_SCALE) scale = want;
+            }
+            if (layer.getScaleX() != scale || layer.getScaleY() != scale) {
+                layer.setPivotX(w / 2f);
+                // Instagram centers the layers in the page, so this fills it top to bottom.
+                layer.setPivotY(h / 2f);
+                layer.setScaleX(scale);
+                layer.setScaleY(scale);
+            }
+            if (scale != 1f) filled.put(layer, Boolean.TRUE);
         }
-        if (container.getScaleX() != scale || container.getScaleY() != scale) {
-            container.setPivotX(w / 2f);
-            container.setPivotY(h / 2f);
-            container.setScaleX(scale);
-            container.setScaleY(scale);
-        }
-        if (scale != 1f) filled.put(container, Boolean.TRUE);
     }
 
     /** Lifts the parent of {@code id} (the host it sits in with its siblings) by {@code by}. */
@@ -186,7 +200,9 @@ final class ReelsBlur {
         ViewGroup cached = pager != null ? pager.get() : null;
         if (cached != null && cached.isShown()) return cached;
         long now = SystemClock.uptimeMillis();
-        if (now - lastScan < RESCAN_MS) return null;
+        // Right after Reels comes up the pager may not be laid out yet: look again next frame,
+        // or the reel shows letterboxed for a moment before it fills the page.
+        if (now >= searchUntil && now - lastScan < RESCAN_MS) return null;
         lastScan = now;
         List<View> found = new ArrayList<>();
         collect(root, found);
