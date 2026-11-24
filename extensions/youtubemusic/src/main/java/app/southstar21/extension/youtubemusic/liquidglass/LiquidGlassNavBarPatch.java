@@ -120,11 +120,34 @@ public final class LiquidGlassNavBarPatch {
         }
     }
 
-    static int id(Activity activity, String name) {
+    public static int id(Activity activity, String name) {
         Resources res = activity.getResources();
         // Resources keep the original package name even if the app was renamed (GmsCore support).
         int id = res.getIdentifier(name, "id", "com.google.android.apps.youtube.music");
         return id != 0 ? id : res.getIdentifier(name, "id", activity.getPackageName());
+    }
+
+    /**
+     * The settings menu switched between lightweight and full glass: every view is drawn again
+     * (the glass reads the setting as it draws), and the bar's cast shadow follows.
+     */
+    public static void onGlassModeChanged(Activity activity) {
+        try {
+            View bar = glassBar == null ? null : glassBar.get();
+            if (bar != null) bar.invalidateOutline();
+            invalidateAll(activity.getWindow().getDecorView());
+        } catch (Throwable t) {
+            Log.e(TAG, "Glass mode change", t);
+        }
+    }
+
+    private static void invalidateAll(View view) {
+        view.invalidate();
+        if (view.getBackground() != null) view.getBackground().invalidateSelf();
+        if (view instanceof ViewGroup) {
+            ViewGroup group = (ViewGroup) view;
+            for (int i = 0; i < group.getChildCount(); i++) invalidateAll(group.getChildAt(i));
+        }
     }
 
     static View findView(Activity activity, String name) {

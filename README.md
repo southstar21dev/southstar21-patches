@@ -113,7 +113,9 @@ Patching YouTube Music without GmsCore support stops with a message saying so, r
 
 | 💊&nbsp;Patch | 📜&nbsp;Description | ⚙️&nbsp;Options |
 |----------|----------------|-----------|
-| [Liquid Glass navigation bar](#liquid-glass-navigation-bar-youtube-music) | Turns the bottom tab bar into floating iOS 26 style Liquid Glass with live background blur and edge refraction, with the mini player docked beside it as round album art with a progress ring, a glass playback bar above, and the content scrolling on behind them. Refraction needs Android 13+, blur needs Android 12+, older versions get a tinted pill. Requires Morphe Patches with GmsCore support, applied together in Expert mode. | • Blur radius<br>• Refraction strength<br>• southstar21 style |
+| [Disable dynamic player color](#disable-dynamic-player-color) | Keeps the full player's background one neutral color instead of changing with each song's album art. Switch it on and pick the color (YouTube Music's default, black or dark grey) in the southstar21 Patches menu in the top bar. Requires Morphe Patches with GmsCore support, applied together in Expert mode. |  |
+| [Hide Ask Music button](#hide-ask-music-button) | Removes the Ask Music AI assistant button (the sparkle) from the top bar, the full player, the mini player, the video's fullscreen controls and the search bar, with its banner. It can be switched off again in the southstar21 Patches menu in the top bar. Requires Morphe Patches with GmsCore support, applied together in Expert mode. |  |
+| [Liquid Glass navigation bar](#liquid-glass-navigation-bar-youtube-music) | Turns the bottom tab bar into floating iOS 26 style Liquid Glass with live background blur and edge refraction, with the mini player docked beside it as round album art with a progress ring, a glass playback bar above, and the content scrolling on behind them. Lightweight glass (the default, switchable to the full effect in the in-app menu) blurs on Android 14+ and gets a solid pill before that; the full effect adds refraction on Android 13+ and blur on Android 12+. Requires Morphe Patches with GmsCore support, applied together in Expert mode. | • Blur radius<br>• Refraction strength<br>• southstar21 style |
 
 </details>
 
@@ -280,12 +282,37 @@ YouTube Music's bottom tab bar and the mini player as Liquid Glass, with the sam
 - **Content behind the glass.** Pages scroll on behind the bar and the mini player instead of stopping above them.
 - **Gliding selection.** Press the selected tab and it swells into a drop of clear glass you can drag between tabs; let go to open the tab underneath.
 
-Like on Spotify, the look comes from the patch options in Morphe Manager (blur radius, refraction strength, southstar21 style). Android 13+ gets the full effect, Android 12 gets blur without refraction, and older versions get a translucent tinted pill.
+The blur radius, refraction strength and southstar21 style come from the patch options in Morphe Manager, like on Spotify. How the glass is drawn is switched inside the app: a sliders button in YouTube Music's top bar, next to the notifications bell, opens the **southstar21 Patches** menu, laid out like the Instagram one. Its *Liquid Glass* page has two style cards, which apply right away:
+
+- **Lightweight** (the default) draws the glass the way Morphe Patches' own glass navigation bar does, and is much smoother on most phones. What's behind the glass goes through one blur with a little extra color, under a translucent fill, a sheen and a painted shadow. There's no refraction, no blurred band along the bottom of the screen, the player's buttons are painted glass circles that still swell under your finger, and the full player keeps YouTube Music's own background instead of the blurred album cover. Android 14+ gets the blur; older versions get a solid pill, since a blur redrawn while the player moves can crash the app on Android 12 and 13.
+- **Full Liquid Glass**: refraction on the bar, the selection drop and the player's liquid buttons, plus the blurred band along the bottom. Android 13+ gets the full effect, Android 12 gets blur without refraction, and older versions get a translucent tinted pill.
 
 <details>
 <summary>How it works</summary>
 
 A hook in `MusicActivity.onWindowFocusChanged` (unobfuscated) starts the extension. The tab bar is a Material `TabLayout` (`pivot_bar`); its tab strip's padding shapes the capsule, so the bar's own padding, which YouTube Music keeps resetting, is never touched. `WatchWhileLayout` measures the bar and rests the player (a bottom sheet) just above it; two hooks in its `onMeasure` give the content the full height so it runs on behind the glass, and lower the player's resting height so the mini player sits in the bar's row. The bar then narrows with a right margin and the mini player with margins of its own, so each keeps its own touches. The album art is placed and sized from the docked slot, blended with YouTube Music's own animation as the player opens. The progress ring, the title and the playback buttons use YouTube Music's media session. The mini player is the top of the player page, whose background is wrapped so it shows the glass while the player is collapsed.
+
+</details>
+
+### Hide Ask Music button
+
+Removes Ask Music, YouTube Music's AI assistant (the sparkle button), from the top bar next to the notifications bell, the full player, the mini player, the video's fullscreen controls and the search bar, along with its banner. The rest of each bar closes the gap. It's off by default in Morphe Manager; once included, it's on, and the southstar21 Patches menu (*Hide Ask Music*) can switch it off again, which brings the buttons back right away.
+
+<details>
+<summary>How it works</summary>
+
+No hooks in YouTube Music's code: the extension hides the buttons after each layout pass, since YouTube Music shows them again whenever it builds a screen. The player's, mini player's, fullscreen and search bar buttons have ids of their own. The top bar's buttons are generic ones YouTube Music fills from its server's data, so Ask Music is told apart by its label, YouTube Music's own translated "Ask Music" string. Lists are skipped while looking, as none of the buttons is in one and a list lays itself out on every frame it scrolls.
+
+</details>
+
+### Disable dynamic player color
+
+YouTube Music colors the full player's background from each song's album art, so it changes with every song. This patch keeps it one neutral color. It's off by default, both in Morphe Manager and once included: switch it on in the southstar21 Patches menu (*Neutral player color*), where the color can be chosen too: *YouTube Music* (the dark grey it shows between songs), *Black* or *Dark grey*. Changes apply to the player right away.
+
+<details>
+<summary>How it works</summary>
+
+YouTube Music colors the player in one method of its player page controller, which takes the two colors (top and bottom) and puts them on the page's gradient, on the color that fades in while swiping between songs, and on the scrims. The patch passes both colors through the extension at the start of that method. To apply a changed setting at once, the extension runs the method again with the last song's colors.
 
 </details>
 
@@ -296,6 +323,8 @@ A hook in `MusicActivity.onWindowFocusChanged` (unobfuscated) starts the extensi
 Every patched Instagram gets a **southstar21 Patches** button in the top bar of your own profile, next to Threads and ☰. It opens a menu listing every patch you included, each with its own page where it can be switched on and off and configured.
 
 Patches you didn't select in Morphe Manager aren't listed. **Restart Instagram** applies settings that only take effect at launch, and **Reset all settings** puts everything back to its defaults.
+
+YouTube Music gets the same menu, in its dark colors, behind a sliders button next to the notifications bell in the top bar. It lists the included patches with settings (Liquid Glass's lightweight or full glass, Hide Ask Music and Neutral player color), with **Restart YouTube Music** and **Reset all settings**. The first time YouTube Music opens with the patches, a welcome card points at that button, thanks you for installing, and explains how to switch to the full Liquid Glass.
 
 <br clear="right">
 

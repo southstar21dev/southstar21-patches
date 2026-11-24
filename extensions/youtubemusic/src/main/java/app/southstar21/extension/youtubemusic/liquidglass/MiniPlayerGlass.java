@@ -410,21 +410,27 @@ final class MiniPlayerGlass implements ViewTreeObserver.OnPreDrawListener {
                 }
                 fullGlass.apply(relayout, now);
                 // YouTube Music fades its own song color in over the page while swiping between
-                // songs, over the blurred cover: kept clear while the player is open.
+                // songs, over the blurred cover: kept clear while the player is open. Lightweight
+                // glass has no blurred cover: YouTube Music's own background stays as it is.
                 if (pageBackground == null || !isInside(pageBackground)) {
                     pageBackground = pageBackgroundId == 0 ? null : page.findViewById(pageBackgroundId);
                 }
-                if (pageBackground != null && pageBackground.getAlpha() != 0f) pageBackground.setAlpha(0f);
+                float pageAlpha = lightweight() ? 1f : 0f;
+                if (pageBackground != null && pageBackground.getAlpha() != pageAlpha) pageBackground.setAlpha(pageAlpha);
                 // Redrawn when the cover image changes (a new song), fading over from the old one.
-                // A video can't be drawn: the last cover stays behind it.
-                Drawable cover = coverImage();
-                boolean due = cover != null ? cover != lastCover : !background.hasBackdrop() && now - lastBackdrop > 1000;
-                if (due) {
-                    lastCover = cover;
-                    lastBackdrop = now;
-                    background.refreshBackdrop();
+                // A video can't be drawn: the last cover stays behind it. Never with lightweight
+                // glass, which shows no blurred cover.
+                if (!lightweight()) {
+                    Drawable cover = coverImage();
+                    boolean due = cover != null ? cover != lastCover
+                            : !background.hasBackdrop() && now - lastBackdrop > 1000;
+                    if (due) {
+                        lastCover = cover;
+                        lastBackdrop = now;
+                        background.refreshBackdrop();
+                    }
+                    if (due || background.fading()) fullGlass.backdropChanged();
                 }
-                if (due || background.fading()) fullGlass.backdropChanged();
             } else {
                 fullGlass.hide();
                 // Collapsed: YouTube Music's own background back as it was.
@@ -963,6 +969,11 @@ final class MiniPlayerGlass implements ViewTreeObserver.OnPreDrawListener {
         return controller;
     }
 
+    /** Lightweight glass (the settings menu's choice): no blurred cover behind the full player. */
+    private static boolean lightweight() {
+        return app.southstar21.extension.youtubemusic.settings.Settings.lightweightGlass();
+    }
+
     /**
      * The page's background: the glass capsule (or card) and the progress ring over YouTube
      * Music's own background, cross-faded.
@@ -997,7 +1008,14 @@ final class MiniPlayerGlass implements ViewTreeObserver.OnPreDrawListener {
 
         @Override
         public void draw(Canvas canvas) {
-            if (glassAlpha < 1f) {
+            if (glassAlpha < 1f && lightweight()) {
+                // Lightweight glass: the full player keeps YouTube Music's own background, with
+                // no blurred cover recorded or drawn.
+                if (original != null) {
+                    original.setAlpha(Math.round((1f - glassAlpha) * 255));
+                    original.draw(canvas);
+                }
+            } else if (glassAlpha < 1f) {
                 // Under a full blurred cover YouTube Music's background can't be seen: not drawn
                 // (a whole screen less to paint each frame). It may have none (with the queue
                 // sheet up): the blurred cover is drawn all the same.
