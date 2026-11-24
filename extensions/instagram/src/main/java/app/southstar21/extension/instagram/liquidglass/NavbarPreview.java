@@ -341,7 +341,8 @@ final class NavbarPreview extends FrameLayout {
             NavbarStyle.VIBRANCY, NavbarStyle.EDGE_CLARITY, NavbarStyle.GLARE, LiquidGlassNavBarPatch.TILT_LIGHT,
             LiquidGlassNavBarPatch.SOUTHSTAR21_STYLE, LiquidGlassNavBarPatch.GLASSY_PILL,
             LiquidGlassNavBarPatch.GLASS_WHILE_DRAGGING, LiquidGlassNavBarPatch.EDGE_COLORS, NavbarStyle.DROP_SIZE,
-            LiquidGlassNavBarPatch.BLUR_VIDEOS));
+            LiquidGlassNavBarPatch.BLUR_VIDEOS, LiquidGlassNavBarPatch.REELS_BLUR,
+            LiquidGlassNavBarPatch.REELS_CLEAR_GLASS));
 
     /**
      * Sweeps one setting between low and high while the bar acts out what shows it. The values
@@ -362,6 +363,8 @@ final class NavbarPreview extends FrameLayout {
         final boolean video;
         /** Content behind bar: off, the page stops at the top of the bar. */
         final boolean extend;
+        /** Reels: reels page up under the bar (see Feed#drawReels). */
+        final boolean reels;
         private int lastTilt;
         private int tapTarget;
         private final int low, high;
@@ -385,6 +388,7 @@ final class NavbarPreview extends FrameLayout {
             tilt = setting == LiquidGlassNavBarPatch.TILT_LIGHT;
             video = setting == LiquidGlassNavBarPatch.BLUR_VIDEOS;
             extend = setting == LiquidGlassNavBarPatch.EXTEND_CONTENT;
+            reels = setting == LiquidGlassNavBarPatch.REELS_BLUR || setting == LiquidGlassNavBarPatch.REELS_CLEAR_GLASS;
             if (setting == NavbarStyle.DROP_SIZE || setting == LiquidGlassNavBarPatch.EDGE_COLORS) {
                 a = Act.DRAG;
                 fixed.put(LiquidGlassNavBarPatch.SOUTHSTAR21_STYLE.key, 1);
@@ -403,6 +407,8 @@ final class NavbarPreview extends FrameLayout {
                 a = Act.TAP_SWITCH;
             }
             if (setting == NavbarStyle.GLARE) theme = false;
+            // Reels is always dark.
+            if (reels) theme = true;
             if (setting == NavbarStyle.EDGE_CLARITY) theme = true;
             // The glint is white light: on a dark bar it shows.
             if (setting == LiquidGlassNavBarPatch.TILT_LIGHT) theme = true;
@@ -442,6 +448,7 @@ final class NavbarPreview extends FrameLayout {
             try {
                 long ms = (System.nanoTime() - start) / 1_000_000L;
                 if (scene != null) scene.update(ms % ACT_MS, valueAt(ms) != 0);
+                if (reels) controller.forceOverMedia(clearGlass(ms));
                 perform(ms);
             } finally {
                 acting = false;
@@ -449,6 +456,21 @@ final class NavbarPreview extends FrameLayout {
         }
 
         private boolean acting;
+
+        /** Reels: the frosted strip shows (always, in the clear glass demo). */
+        boolean reelsStrip(long ms) {
+            return setting == LiquidGlassNavBarPatch.REELS_CLEAR_GLASS || valueAt(ms) != 0;
+        }
+
+        /** Reels: the bar is clearer glass, as Instagram's would be with these settings. */
+        private boolean clearGlass(long ms) {
+            if (setting == LiquidGlassNavBarPatch.REELS_CLEAR_GLASS) return valueAt(ms) != 0;
+            return valueAt(ms) != 0 && LiquidGlassNavBarPatch.REELS_CLEAR_GLASS.get();
+        }
+
+        long elapsedMs() {
+            return (System.nanoTime() - start) / 1_000_000L;
+        }
 
         private int valueAt(long ms) {
             if (setting instanceof BooleanSetting) {
@@ -933,6 +955,11 @@ final class NavbarPreview extends FrameLayout {
             canvas.drawColor(dark ? 0xFF0B0F14 : Color.WHITE);
             // Scene demos use bold colors, so there's always something to see under the glass.
             int kind = demo != null ? (demo.video ? 3 : scene != null ? 2 : 0) : backdrop;
+            if (demo != null && demo.reels) {
+                drawReels(canvas);
+                postInvalidateOnAnimation();
+                return;
+            }
             if (kind == 3) {
                 drawVideo(canvas);
                 postInvalidateOnAnimation();
@@ -1068,6 +1095,163 @@ final class NavbarPreview extends FrameLayout {
             text.setTextSize(13 * d);
             int sec = (int) t % 60;
             canvas.drawText("0:" + (sec < 10 ? "0" : "") + sec, w - 62 * d, 30 * d, text);
+        }
+
+        /** Recorded reels for the frosted strip, two since two reels show mid-scroll. */
+        private final android.graphics.RenderNode[] reelNodes = new android.graphics.RenderNode[2];
+        private final android.graphics.RenderNode[] blurNodes = new android.graphics.RenderNode[2];
+        private final Paint stripMask = new Paint();
+        private final Paint stripTint = new Paint();
+        private int stripMaskFor = -1;
+
+        /**
+         * Reels paging up under the bar, one every act. With the strip on, each reel runs down
+         * behind the bar and the strip under its caption is a frosted copy of it, which scrolls
+         * away with it. Off, like stock Instagram: the reel stops above the bar, black below.
+         */
+        private void drawReels(Canvas canvas) {
+            float d = density;
+            int w = getWidth();
+            int h = getHeight();
+            long ms = demo.elapsedMs();
+            boolean strip = demo.reelsStrip(ms);
+            int barTop = bar.getTop() > 0 ? bar.getTop() : h - dp(70);
+            int pageH = strip ? h : barTop;
+            // Where the strip starts, a little above the pill, as in Instagram.
+            int stripTop = barTop - dp(10);
+            canvas.drawColor(Color.BLACK);
+
+            // Hold, then swipe on to the next reel, settled before the setting flips.
+            long act = ms / Demo.ACT_MS;
+            float f = Math.max(0f, Math.min(1f, (ms % Demo.ACT_MS - 1500) / 650f));
+            f = f * f * (3 - 2 * f);
+            float position = act + f;
+            int first = (int) Math.floor(position);
+            for (int k = first; k <= first + 1; k++) {
+                float top = (k - position) * pageH;
+                if (top >= h) break;
+                int save = canvas.save();
+                canvas.translate(0, top);
+                canvas.clipRect(0, 0, w, pageH);
+                int slot = Math.floorMod(k, 2);
+                boolean frosted = strip && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S
+                        && canvas.isHardwareAccelerated();
+                if (frosted) {
+                    android.graphics.RenderNode node = reelNode(slot, w, pageH);
+                    android.graphics.RecordingCanvas rc = node.beginRecording(w, pageH);
+                    try {
+                        drawReelVideo(rc, k, w, pageH);
+                    } finally {
+                        node.endRecording();
+                    }
+                    canvas.drawRenderNode(node);
+                    drawStrip(canvas, slot, node, w, pageH, pageH - (h - stripTop));
+                } else {
+                    drawReelVideo(canvas, k, w, pageH);
+                }
+                // The caption and buttons end above the strip (or the bar).
+                drawReelChrome(canvas, k, w, strip ? pageH - (h - stripTop) : pageH - dp(8));
+                canvas.restoreToCount(save);
+            }
+        }
+
+        private android.graphics.RenderNode reelNode(int slot, int w, int h) {
+            if (reelNodes[slot] == null) {
+                reelNodes[slot] = new android.graphics.RenderNode("PreviewReel" + slot);
+                blurNodes[slot] = new android.graphics.RenderNode("PreviewReelBlur" + slot);
+                float r = 20 * density;
+                blurNodes[slot].setRenderEffect(android.graphics.RenderEffect.createBlurEffect(r, r,
+                        Shader.TileMode.CLAMP));
+            }
+            reelNodes[slot].setPosition(0, 0, w, h);
+            return reelNodes[slot];
+        }
+
+        /** The frosted strip from {@code top} to the reel's bottom, easing in over its top. */
+        private void drawStrip(Canvas canvas, int slot, android.graphics.RenderNode reel, int w, int pageH, int top) {
+            int sh = pageH - top;
+            if (sh <= 0) return;
+            if (stripMaskFor != sh) {
+                stripMaskFor = sh;
+                float feather = Math.min(0.6f, 56 * density / sh);
+                stripMask.setXfermode(new android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.DST_IN));
+                stripMask.setShader(new LinearGradient(0, 0, 0, sh, new int[]{0, 0xFF000000, 0xFF000000},
+                        new float[]{0f, feather, 1f}, Shader.TileMode.CLAMP));
+                stripTint.setShader(new LinearGradient(0, 0, 0, sh, new int[]{0, 0x18000000, 0x38000000},
+                        new float[]{0f, feather, 1f}, Shader.TileMode.CLAMP));
+            }
+            android.graphics.RenderNode blur = blurNodes[slot];
+            blur.setPosition(0, 0, w, pageH);
+            android.graphics.RecordingCanvas rc = blur.beginRecording(w, pageH);
+            try {
+                rc.drawRenderNode(reel);
+            } finally {
+                blur.endRecording();
+            }
+            int save = canvas.save();
+            canvas.translate(0, top);
+            int layer = canvas.saveLayer(0, 0, w, sh, null);
+            canvas.translate(0, -top);
+            canvas.drawRenderNode(blur);
+            canvas.translate(0, top);
+            canvas.drawRect(0, 0, w, sh, stripMask);
+            canvas.restoreToCount(layer);
+            canvas.drawRect(0, 0, w, sh, stripTint);
+            canvas.restoreToCount(save);
+        }
+
+        /** A reel's video: bold diagonal bands and a ball, in colors of its own. */
+        private void drawReelVideo(Canvas canvas, int index, int w, int h) {
+            float d = density;
+            float t = (System.nanoTime() % 60_000_000_000L) / 1e9f;
+            int[] palette = palettes[Math.floorMod(index, palettes.length)];
+            paint.setStyle(Paint.Style.FILL);
+            paint.setShader(new LinearGradient(0, 0, w, h, palette[0], palette[1], Shader.TileMode.CLAMP));
+            canvas.drawRect(0, 0, w, h, paint);
+            paint.setShader(null);
+            float band = 64 * d;
+            float offset = (t * 60 * d) % (band * 2);
+            for (int i = -2; i * band - offset < w + h; i += 2) {
+                paint.setColor(colors[Math.floorMod(i / 2 + index, colors.length)] & 0x99FFFFFF);
+                float x = i * band - offset;
+                path.reset();
+                path.moveTo(x, 0);
+                path.lineTo(x + band, 0);
+                path.lineTo(x + band - h * 0.5f, h);
+                path.lineTo(x - h * 0.5f, h);
+                path.close();
+                canvas.drawPath(path, paint);
+            }
+            paint.setColor(Color.WHITE);
+            float bx = w * (0.5f + 0.35f * (float) Math.sin(t * 1.7 + index));
+            float by = h * (0.7f + 0.2f * (float) Math.cos(t * 2.3 + index));
+            canvas.drawCircle(bx, by, 30 * d, paint);
+        }
+
+        /** The name, caption and button column, ending at {@code bottom}. */
+        private void drawReelChrome(Canvas canvas, int index, int w, int bottom) {
+            float d = density;
+            paint.setShader(null);
+            paint.setStyle(Paint.Style.FILL);
+            int[] palette = palettes[Math.floorMod(index + 1, palettes.length)];
+            paint.setShader(new LinearGradient(16 * d, bottom - 64 * d, 48 * d, bottom - 32 * d,
+                    palette[0], palette[1], Shader.TileMode.CLAMP));
+            canvas.drawCircle(32 * d, bottom - 48 * d, 15 * d, paint);
+            paint.setShader(null);
+            paint.setColor(Color.WHITE);
+            rect.set(56 * d, bottom - 54 * d, 150 * d, bottom - 43 * d);
+            canvas.drawRoundRect(rect, 5 * d, 5 * d, paint);
+            paint.setColor(0xCCFFFFFF);
+            rect.set(16 * d, bottom - 22 * d, w * 0.62f, bottom - 13 * d);
+            canvas.drawRoundRect(rect, 4 * d, 4 * d, paint);
+            // Like, comment, share and more, up the right edge.
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(2 * d);
+            paint.setColor(Color.WHITE);
+            for (int i = 0; i < 4; i++) {
+                canvas.drawCircle(w - 30 * d, bottom - 24 * d - i * 46 * d, 11 * d, paint);
+            }
+            paint.setStyle(Paint.Style.FILL);
         }
 
         /** Lines of crisp text, where blur and refraction are easiest to read. */
