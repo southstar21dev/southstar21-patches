@@ -39,6 +39,8 @@ public final class Icons {
         NO_ADS,
         /** An hourglass, for time limits. */
         HOURGLASS,
+        /** YouTube Music's Ask Music sparkle with a red line through it, for hiding it. */
+        NO_ASK_MUSIC,
     }
 
     /** A white glyph on a rounded square filled with a soft gradient of {@code color}. */
@@ -76,6 +78,8 @@ public final class Icons {
         private final RectF rect = new RectF();
         private final Path path = new Path();
 
+        private final Paint cross = new Paint(Paint.ANTI_ALIAS_FLAG);
+
         Tile(Glyph glyph, int color, float density) {
             this.glyph = glyph;
             this.color = color;
@@ -85,6 +89,8 @@ public final class Icons {
             stroke.setStrokeJoin(Paint.Join.ROUND);
             stroke.setColor(0xFFFFFFFF);
             solid.setColor(0xFFFFFFFF);
+            cross.setStyle(Paint.Style.STROKE);
+            cross.setStrokeCap(Paint.Cap.ROUND);
         }
 
         @Override
@@ -153,6 +159,31 @@ public final class Icons {
                     float r = s * 0.045f;
                     canvas.drawCircle(s * 0.34f, s * 0.5f, r, solid);
                     canvas.drawCircle(s * 0.66f, s * 0.5f, r, solid);
+                    break;
+                }
+                case NO_ASK_MUSIC: {
+                    // The sparkle: four points joined by curves pulled in towards the middle,
+                    // in a layer of its own so the gap around the line can be cut out of it.
+                    float c = s * 0.5f, r = s * 0.31f, k = s * 0.075f;
+                    int layer = canvas.saveLayer(0, 0, s, s, null);
+                    path.reset();
+                    path.moveTo(c, c - r);
+                    path.quadTo(c + k, c - k, c + r, c);
+                    path.quadTo(c + k, c + k, c, c + r);
+                    path.quadTo(c - k, c + k, c - r, c);
+                    path.quadTo(c - k, c - k, c, c - r);
+                    path.close();
+                    canvas.drawPath(path, solid);
+                    float width = stroke.getStrokeWidth();
+                    cross.setStrokeWidth(width * 1.8f);
+                    cross.setXfermode(new android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.CLEAR));
+                    canvas.drawLine(s * 0.22f, s * 0.78f, s * 0.78f, s * 0.22f, cross);
+                    cross.setXfermode(null);
+                    canvas.restoreToCount(layer);
+                    // The red line through it.
+                    cross.setStrokeWidth(width * 1.1f);
+                    cross.setColor(0xFFFF3B30);
+                    canvas.drawLine(s * 0.22f, s * 0.78f, s * 0.78f, s * 0.22f, cross);
                     break;
                 }
                 case NO_REELS: {

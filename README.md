@@ -113,6 +113,8 @@ Patching YouTube Music without GmsCore support stops with a message saying so, r
 
 | 💊&nbsp;Patch | 📜&nbsp;Description | ⚙️&nbsp;Options |
 |----------|----------------|-----------|
+| [Disable dynamic player color](#disable-dynamic-player-color) | Keeps the full player's background one neutral color instead of changing with each song's album art. Switch it on and pick the color (YouTube Music's default, black or dark grey) in the southstar21 Patches menu in the top bar. Requires Morphe Patches with GmsCore support, applied together in Expert mode. |  |
+| [Hide Ask Music button](#hide-ask-music-button) | Removes the Ask Music AI assistant button (the sparkle) from the top bar, the full player, the mini player, the video's fullscreen controls and the search bar, with its banner. It can be switched off again in the southstar21 Patches menu in the top bar. Requires Morphe Patches with GmsCore support, applied together in Expert mode. |  |
 | [Liquid Glass navigation bar](#liquid-glass-navigation-bar-youtube-music) | Turns the bottom tab bar into floating iOS 26 style Liquid Glass with live background blur and edge refraction, with the mini player docked beside it as round album art with a progress ring, a glass playback bar above, and the content scrolling on behind them. Lightweight glass (the default, switchable to the full effect in the in-app menu) blurs on Android 14+ and gets a solid pill before that; the full effect adds refraction on Android 13+ and blur on Android 12+. Requires Morphe Patches with GmsCore support, applied together in Expert mode. | • Blur radius<br>• Refraction strength<br>• southstar21 style |
 
 </details>
@@ -292,6 +294,28 @@ A hook in `MusicActivity.onWindowFocusChanged` (unobfuscated) starts the extensi
 
 </details>
 
+### Hide Ask Music button
+
+Removes Ask Music, YouTube Music's AI assistant (the sparkle button), from the top bar next to the notifications bell, the full player, the mini player, the video's fullscreen controls and the search bar, along with its banner. The rest of each bar closes the gap. It's off by default in Morphe Manager; once included, it's on, and the southstar21 Patches menu (*Hide Ask Music*) can switch it off again, which brings the buttons back right away.
+
+<details>
+<summary>How it works</summary>
+
+No hooks in YouTube Music's code: the extension hides the buttons after each layout pass, since YouTube Music shows them again whenever it builds a screen. The player's, mini player's, fullscreen and search bar buttons have ids of their own. The top bar's buttons are generic ones YouTube Music fills from its server's data, so Ask Music is told apart by its label, YouTube Music's own translated "Ask Music" string. Lists are skipped while looking, as none of the buttons is in one and a list lays itself out on every frame it scrolls.
+
+</details>
+
+### Disable dynamic player color
+
+YouTube Music colors the full player's background from each song's album art, so it changes with every song. This patch keeps it one neutral color. It's off by default, both in Morphe Manager and once included: switch it on in the southstar21 Patches menu (*Neutral player color*), where the color can be chosen too: *YouTube Music* (the dark grey it shows between songs), *Black* or *Dark grey*. Changes apply to the player right away.
+
+<details>
+<summary>How it works</summary>
+
+YouTube Music colors the player in one method of its player page controller, which takes the two colors (top and bottom) and puts them on the page's gradient, on the color that fades in while swiping between songs, and on the scrims. The patch passes both colors through the extension at the start of that method. To apply a changed setting at once, the extension runs the method again with the last song's colors.
+
+</details>
+
 ## Settings menu
 
 <img align="right" alt="The southstar21 Patches settings menu" src=".github/readme/settings-menu.png" width="300">
@@ -300,7 +324,7 @@ Every patched Instagram gets a **southstar21 Patches** button in the top bar of 
 
 Patches you didn't select in Morphe Manager aren't listed. **Restart Instagram** applies settings that only take effect at launch, and **Reset all settings** puts everything back to its defaults.
 
-YouTube Music gets the same menu, in its dark colors, behind a sliders button next to the notifications bell in the top bar. So far it holds the choice between lightweight and full Liquid Glass, with **Restart YouTube Music** and **Reset all settings**. The first time YouTube Music opens with the patches, a welcome card points at that button, thanks you for installing, and explains how to switch to the full Liquid Glass.
+YouTube Music gets the same menu, in its dark colors, behind a sliders button next to the notifications bell in the top bar. It lists the included patches with settings (Liquid Glass's lightweight or full glass, Hide Ask Music and Neutral player color), with **Restart YouTube Music** and **Reset all settings**. The first time YouTube Music opens with the patches, a welcome card points at that button, thanks you for installing, and explains how to switch to the full Liquid Glass.
 
 <br clear="right">
 

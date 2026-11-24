@@ -36,7 +36,9 @@ import android.widget.TextView;
 import java.util.ArrayDeque;
 
 import app.southstar21.extension.youtubemusic.YouTubeMusicHooks;
+import app.southstar21.extension.youtubemusic.askmusic.HideAskMusicPatch;
 import app.southstar21.extension.youtubemusic.liquidglass.LiquidGlassNavBarPatch;
+import app.southstar21.extension.youtubemusic.playercolor.PlayerColorPatch;
 
 /**
  * Full-screen southstar21 Patches menu, laid out like the Instagram patches' menu: the first
@@ -49,6 +51,9 @@ public final class SettingsMenu {
     private static final int GREEN = 0xFF34C759;
     private static final int RED = 0xFFFF3B30;
     private static final int PURPLE = 0xFF5E5CE6;
+    private static final int ORANGE = 0xFFFF9500;
+    /** Neutral, so the red line through the Ask Music sparkle stands out. */
+    private static final int GRAPHITE = 0xFF48484A;
     private static final long PUSH_MS = 320;
 
     private static final int BACKGROUND = Color.BLACK;
@@ -60,6 +65,37 @@ public final class SettingsMenu {
     private static final int PRESSED = 0x33FFFFFF;
 
     private static final String GLASS_TITLE = "Liquid Glass";
+    private static final String COLOR_TITLE = "Neutral player color";
+    private static final String COLOR_DESCRIPTION = "The full player's background stays one neutral color "
+            + "instead of changing with each song's album art.";
+    private static final String ASK_TITLE = "Hide Ask Music";
+    private static final String ASK_DESCRIPTION = "Removes the Ask Music AI button from the top bar, the player "
+            + "and the search bar.";
+    private static final String ASK_WHAT = "Ask Music is YouTube Music's AI assistant, the sparkle button next to "
+            + "the notifications bell, in the full player and in the search bar. With this on, those buttons "
+            + "and the Ask Music banner are gone, and the rest of the bar closes the gap.";
+    private static final String ASK_WHY = "Fewer buttons, and no AI assistant one tap away if you don't use it.";
+    private static final String ASK_ENABLED_HELP = "On, the Ask Music buttons are hidden everywhere. Off, they "
+            + "come back. Changes apply right away.";
+    private static final String GLASS_WHAT = "Turns YouTube Music's tab bar into a floating pill of glass, docks "
+            + "the mini player beside it as round album art with a progress ring and a glass playback bar above, "
+            + "and puts glass on the full player's buttons. Lightweight glass draws it all with one blur and "
+            + "simple shading, so it runs smoothly on older or slower phones. Full Liquid Glass adds refraction "
+            + "along every edge, a blurred band along the bottom of the screen and liquid buttons in the player "
+            + "that swell and melt together under your finger.";
+    private static final String GLASS_WHY = "It's a look. It brings the iOS 26 Liquid Glass design to YouTube "
+            + "Music on Android, and doesn't change how anything works.";
+    private static final String COLOR_WHAT = "YouTube Music colors the full player's background from each song's "
+            + "album art, so it changes with every song. With this on, it stays one neutral color instead: "
+            + "YouTube Music's own dark grey, black or dark grey.";
+    private static final String COLOR_WHY = "A calmer player that looks the same for every song, without bright "
+            + "or clashing colors behind the cover.";
+    private static final String ENABLED_HELP = "On, the full player keeps one neutral color for every song. Off, "
+            + "it takes on each song's album colors, as YouTube Music normally does. Changes apply right away, "
+            + "even with the player open.";
+    private static final String BACKGROUND_HELP = "The color the full player keeps. YouTube Music is the dark grey "
+            + "it shows between songs. Black is pure black, which looks best on OLED screens. Dark grey is a "
+            + "little lighter.";
     private static final String GLASS_DESCRIPTION = "iOS 26 style glass tab bar, mini player and player. "
             + "The mini player docks beside the tabs as round album art.";
 
@@ -86,6 +122,9 @@ public final class SettingsMenu {
             Log.e(YouTubeMusicHooks.TAG, "Settings menu failed", t);
         }
     }
+
+
+
 
 
     private SettingsMenu(Activity activity) {
@@ -226,8 +265,20 @@ public final class SettingsMenu {
 
         list.addView(sectionHeader("Installed patches"));
         LinearLayout patchCard = cardView();
-        patchCard.addView(navigationRow(Icons.Glyph.GLASS, PURPLE, GLASS_TITLE, shortDescription(GLASS_DESCRIPTION),
-                Settings.lightweightGlass() ? "Lightweight" : "Full", () -> push(this::buildGlassPage, true)));
+        if (LiquidGlassNavBarPatch.isIncluded()) {
+            patchCard.addView(navigationRow(Icons.Glyph.GLASS, PURPLE, GLASS_TITLE, shortDescription(GLASS_DESCRIPTION),
+                    Settings.lightweightGlass() ? "Lightweight" : "Full", () -> push(this::buildGlassPage, true)));
+        }
+        if (HideAskMusicPatch.isIncluded()) {
+            if (patchCard.getChildCount() > 0) patchCard.addView(dividerView(true));
+            patchCard.addView(navigationRow(Icons.Glyph.NO_ASK_MUSIC, GRAPHITE, ASK_TITLE, shortDescription(ASK_DESCRIPTION),
+                    Settings.hideAskMusic() ? "On" : "Off", () -> push(this::buildAskMusicPage, true)));
+        }
+        if (PlayerColorPatch.isIncluded()) {
+            if (patchCard.getChildCount() > 0) patchCard.addView(dividerView(true));
+            patchCard.addView(navigationRow(Icons.Glyph.DROP, ORANGE, COLOR_TITLE, shortDescription(COLOR_DESCRIPTION),
+                    Settings.playerColorEnabled() ? "On" : "Off", () -> push(this::buildPlayerColorPage, true)));
+        }
         list.addView(patchCard);
         list.addView(sectionFooter("Patches not selected in Morphe Manager aren't listed."));
 
@@ -241,6 +292,8 @@ public final class SettingsMenu {
                 "Every patch goes back to its defaults.",
                 "Reset", () -> {
                     setLightweight(true);
+                    resetPlayerColor();
+                    resetAskMusic();
                     replaceTop();
                 })));
         list.addView(app);
@@ -251,23 +304,8 @@ public final class SettingsMenu {
     private View buildGlassPage() {
         LinearLayout list = pageList();
 
-        // Header: big icon, name and what the patch does.
-        LinearLayout header = new LinearLayout(activity);
-        header.setOrientation(LinearLayout.VERTICAL);
-        header.setGravity(Gravity.CENTER_HORIZONTAL);
-        header.setPadding(dp(16), dp(8), dp(16), dp(8));
-        ImageView icon = new ImageView(activity);
-        icon.setImageDrawable(Icons.tile(Icons.Glyph.GLASS, PURPLE, density));
-        header.addView(icon, new LinearLayout.LayoutParams(dp(64), dp(64)));
-        TextView name = text(GLASS_TITLE, 24, TEXT_PRIMARY, true);
-        name.setGravity(Gravity.CENTER);
-        name.setPadding(0, dp(12), 0, 0);
-        header.addView(name);
-        TextView description = text(GLASS_DESCRIPTION, 15, TEXT_SECONDARY, false);
-        description.setGravity(Gravity.CENTER);
-        description.setPadding(dp(8), dp(4), dp(8), 0);
-        header.addView(description);
-        list.addView(header);
+        list.addView(patchHeader(Icons.Glyph.GLASS, PURPLE, GLASS_TITLE, GLASS_DESCRIPTION,
+                () -> push(() -> buildAboutPage(Icons.Glyph.GLASS, PURPLE, GLASS_TITLE, GLASS_WHAT, GLASS_WHY), true)));
 
         LinearLayout.LayoutParams cardsLp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -294,7 +332,7 @@ public final class SettingsMenu {
 
     /**
      * The choice of glass: two big cards, each a small bar drawn in its style, the chosen one
-     * ringed, with a note on the chosen one underneath. Tapping the other switches to it.
+     * ringed. Tapping the other switches to it.
      */
     private View styleCards() {
         boolean lightweight = Settings.lightweightGlass();
@@ -318,15 +356,6 @@ public final class SettingsMenu {
             row.addView(card, lp);
         }
         column.addView(row);
-
-        TextView note = text(lightweight
-                ? "One blur and simple shading, drawn the way Morphe Patches draws its glass. Smooth on every "
-                + "phone. Android 14 and later blur what's behind the glass; older versions get a solid bar."
-                : "Refraction along every edge, a blurred band along the bottom of the screen and liquid "
-                + "buttons in the player. It's the heaviest look; on an older phone, Lightweight runs much "
-                + "smoother.", 13, TEXT_SECONDARY, false);
-        note.setPadding(dp(16), dp(8), dp(16), 0);
-        column.addView(note);
         return column;
     }
 
@@ -357,6 +386,332 @@ public final class SettingsMenu {
         tag.setEllipsize(TextUtils.TruncateAt.END);
         card.addView(tag);
         return card;
+    }
+
+    /**
+     * Neutral player color (the Disable dynamic player color patch): on/off and the neutral color, both applied to the player right
+     * away.
+     */
+    private View buildPlayerColorPage() {
+        LinearLayout list = pageList();
+        list.addView(patchHeader(Icons.Glyph.DROP, ORANGE, COLOR_TITLE, COLOR_DESCRIPTION,
+                () -> push(() -> buildAboutPage(Icons.Glyph.DROP, ORANGE, COLOR_TITLE, COLOR_WHAT, COLOR_WHY), true)));
+
+        list.addView(sectionHeader(null));
+        LinearLayout main = cardView();
+        main.addView(switchRow("Enabled", null, ENABLED_HELP,
+                Settings.playerColorEnabled(), on -> {
+                    Settings.setPlayerColorEnabled(on);
+                    PlayerColorPatch.reapply();
+                    replaceTop();
+                }));
+        list.addView(main);
+
+        View colorHeader = sectionHeader("Color");
+        list.addView(colorHeader);
+        LinearLayout colors = cardView();
+        colors.addView(swatchRow());
+        list.addView(colors);
+        View footer = sectionFooter("YouTube Music is the dark grey it shows between songs.");
+        list.addView(footer);
+        if (!Settings.playerColorEnabled()) {
+            for (View v : new View[]{colorHeader, colors, footer}) {
+                v.setAlpha(0.4f);
+                setEnabledRecursive(v, false);
+            }
+        }
+
+        list.addView(sectionHeader(null));
+        LinearLayout reset = cardView();
+        TextView resetText = text("Reset to defaults", 16, ACCENT, false);
+        resetText.setGravity(Gravity.CENTER);
+        resetText.setMinHeight(dp(50));
+        resetText.setBackground(ripple());
+        resetText.setOnClickListener(v -> confirm("Reset " + COLOR_TITLE + "?",
+                "It goes back to off, with YouTube Music's own dark grey chosen.", "Reset", () -> {
+                    resetPlayerColor();
+                    replaceTop();
+                }));
+        reset.addView(resetText, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT));
+        list.addView(reset);
+        return page("Patches", list);
+    }
+
+    /** Hide Ask Music: an on/off switch, applied right away. */
+    private View buildAskMusicPage() {
+        LinearLayout list = pageList();
+        list.addView(patchHeader(Icons.Glyph.NO_ASK_MUSIC, GRAPHITE, ASK_TITLE, ASK_DESCRIPTION,
+                () -> push(() -> buildAboutPage(Icons.Glyph.NO_ASK_MUSIC, GRAPHITE, ASK_TITLE, ASK_WHAT, ASK_WHY), true)));
+        list.addView(sectionHeader(null));
+        LinearLayout main = cardView();
+        main.addView(switchRow("Enabled", null, ASK_ENABLED_HELP, Settings.hideAskMusic(), on -> {
+            Settings.setHideAskMusic(on);
+            HideAskMusicPatch.refresh();
+        }));
+        list.addView(main);
+
+        list.addView(sectionHeader(null));
+        LinearLayout reset = cardView();
+        TextView resetText = text("Reset to defaults", 16, ACCENT, false);
+        resetText.setGravity(Gravity.CENTER);
+        resetText.setMinHeight(dp(50));
+        resetText.setBackground(ripple());
+        resetText.setOnClickListener(v -> confirm("Reset " + ASK_TITLE + "?",
+                "It goes back to on, with the Ask Music buttons hidden.", "Reset", () -> {
+                    resetAskMusic();
+                    replaceTop();
+                }));
+        reset.addView(resetText, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT));
+        list.addView(reset);
+        return page("Patches", list);
+    }
+
+    private void resetAskMusic() {
+        Settings.setHideAskMusic(true);
+        if (HideAskMusicPatch.isIncluded()) HideAskMusicPatch.refresh();
+    }
+
+    private void resetPlayerColor() {
+        Settings.setPlayerColorEnabled(false);
+        Settings.setPlayerColorChoice(0);
+        if (PlayerColorPatch.isIncluded()) PlayerColorPatch.reapply();
+    }
+
+    /**
+     * The color choices as chips, each a dot of its color and its name, the chosen one filled.
+     * The colors are all near black, so the names do the telling apart.
+     */
+    private View swatchRow() {
+        LinearLayout row = rowContainer(dp(52));
+        row.setOrientation(LinearLayout.VERTICAL);
+        row.setGravity(Gravity.NO_GRAVITY);
+        row.setPadding(dp(16), dp(12), dp(16), dp(14));
+        row.addView(titleWithHelp("Background", BACKGROUND_HELP));
+
+        LinearLayout options = new LinearLayout(activity);
+        options.setGravity(Gravity.CENTER_VERTICAL);
+        int chosen = Settings.playerColorChoice();
+        int[] colors = {PlayerColorPatch.youTubeMusicDefault(), Color.BLACK, 0xFF1C1C1E};
+        for (int i = 0; i < colors.length; i++) {
+            final int index = i;
+            boolean on = i == chosen;
+            LinearLayout chip = new LinearLayout(activity);
+            chip.setGravity(Gravity.CENTER_VERTICAL);
+            chip.setPadding(dp(8), dp(6), dp(12), dp(6));
+            GradientDrawable pill = new GradientDrawable();
+            pill.setCornerRadius(dp(16));
+            pill.setColor(on ? ACCENT : 0xFF2C2C2E);
+            GradientDrawable mask = new GradientDrawable();
+            mask.setColor(Color.WHITE);
+            mask.setCornerRadius(dp(16));
+            chip.setBackground(new RippleDrawable(ColorStateList.valueOf(PRESSED), pill, mask));
+
+            View dot = new View(activity);
+            GradientDrawable circle = new GradientDrawable();
+            circle.setShape(GradientDrawable.OVAL);
+            circle.setColor(colors[i]);
+            circle.setStroke(Math.max(1, dp(1)), on ? 0xCCFFFFFF : 0x66FFFFFF);
+            dot.setBackground(circle);
+            chip.addView(dot, new LinearLayout.LayoutParams(dp(16), dp(16)));
+            TextView label = text(PlayerColorPatch.COLOR_NAMES[i], 14, on ? Color.WHITE : TEXT_PRIMARY, on);
+            LinearLayout.LayoutParams labelLp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            labelLp.leftMargin = dp(6);
+            chip.addView(label, labelLp);
+
+            chip.setContentDescription(PlayerColorPatch.COLOR_NAMES[i] + (on ? ", chosen" : ""));
+            chip.setOnClickListener(v -> {
+                if (Settings.playerColorChoice() == index) return;
+                Settings.setPlayerColorChoice(index);
+                PlayerColorPatch.reapply();
+                replaceTop();
+            });
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            lp.rightMargin = dp(8);
+            options.addView(chip, lp);
+        }
+        android.widget.HorizontalScrollView scroller = new android.widget.HorizontalScrollView(activity);
+        scroller.setHorizontalScrollBarEnabled(false);
+        scroller.addView(options);
+        LinearLayout.LayoutParams scrollerLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        scrollerLp.topMargin = dp(12);
+        row.addView(scroller, scrollerLp);
+        return row;
+    }
+
+    private interface BooleanListener {
+        void onChanged(boolean value);
+    }
+
+    /** A title, a summary and an iOS style switch, toggled by tapping anywhere on the row. */
+    private View switchRow(String title, String summary, String help, boolean checked, BooleanListener listener) {
+        LinearLayout row = rowContainer(dp(52));
+        LinearLayout labels = new LinearLayout(activity);
+        labels.setOrientation(LinearLayout.VERTICAL);
+        labels.addView(titleWithHelp(title, help));
+        if (!TextUtils.isEmpty(summary)) {
+            TextView s = text(summary, 13, TEXT_SECONDARY, false);
+            s.setPadding(0, dp(2), dp(8), 0);
+            labels.addView(s);
+        }
+        row.addView(labels, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+        android.widget.Switch toggle = new android.widget.Switch(activity);
+        toggle.setChecked(checked);
+        int[][] states = {{android.R.attr.state_checked}, {}};
+        toggle.setThumbTintList(new ColorStateList(states, new int[]{Color.WHITE, 0xFFCCCCCC}));
+        toggle.setTrackTintList(new ColorStateList(states, new int[]{GREEN, 0xFF39393D}));
+        toggle.setOnCheckedChangeListener((button, on) -> listener.onChanged(on));
+        row.addView(toggle);
+        row.setBackground(ripple());
+        row.setOnClickListener(v -> toggle.toggle());
+        return row;
+    }
+
+    private static void setEnabledRecursive(View view, boolean enabled) {
+        view.setEnabled(enabled);
+        if (view instanceof ViewGroup) {
+            ViewGroup group = (ViewGroup) view;
+            for (int i = 0; i < group.getChildCount(); i++) setEnabledRecursive(group.getChildAt(i), enabled);
+        }
+    }
+
+    /** A patch page's header: big icon, name, what the patch does and a "What is this?" link. */
+    private View patchHeader(Icons.Glyph glyph, int color, String title, String description, Runnable onAbout) {
+        LinearLayout header = new LinearLayout(activity);
+        header.setOrientation(LinearLayout.VERTICAL);
+        header.setGravity(Gravity.CENTER_HORIZONTAL);
+        header.setPadding(dp(16), dp(8), dp(16), dp(8));
+        ImageView icon = new ImageView(activity);
+        icon.setImageDrawable(Icons.tile(glyph, color, density));
+        header.addView(icon, new LinearLayout.LayoutParams(dp(64), dp(64)));
+        TextView name = text(title, 24, TEXT_PRIMARY, true);
+        name.setGravity(Gravity.CENTER);
+        name.setPadding(0, dp(12), 0, 0);
+        header.addView(name);
+        TextView text = text(description, 15, TEXT_SECONDARY, false);
+        text.setGravity(Gravity.CENTER);
+        text.setPadding(dp(8), dp(4), dp(8), 0);
+        header.addView(text);
+        if (onAbout != null) {
+            TextView about = text("What is this?", 15, ACCENT, false);
+            about.setGravity(Gravity.CENTER);
+            about.setPadding(dp(12), dp(6), dp(12), dp(6));
+            about.setBackground(ripple());
+            about.setOnClickListener(v -> onAbout.run());
+            LinearLayout.LayoutParams aboutLp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            aboutLp.topMargin = dp(4);
+            header.addView(about, aboutLp);
+        }
+        return header;
+    }
+
+    /** "What is this?": what a patch does and what it's for, in plain words. */
+    private View buildAboutPage(Icons.Glyph glyph, int color, String title, String what, String why) {
+        LinearLayout list = pageList();
+        LinearLayout header = new LinearLayout(activity);
+        header.setOrientation(LinearLayout.VERTICAL);
+        header.setGravity(Gravity.CENTER_HORIZONTAL);
+        header.setPadding(dp(16), dp(8), dp(16), dp(8));
+        ImageView icon = new ImageView(activity);
+        icon.setImageDrawable(Icons.tile(glyph, color, density));
+        header.addView(icon, new LinearLayout.LayoutParams(dp(64), dp(64)));
+        TextView name = text(title, 24, TEXT_PRIMARY, true);
+        name.setGravity(Gravity.CENTER);
+        name.setPadding(0, dp(12), 0, 0);
+        header.addView(name);
+        list.addView(header);
+        addAboutSection(list, "What it does", what);
+        addAboutSection(list, "What it's for", why);
+        return page(title, list);
+    }
+
+    private void addAboutSection(LinearLayout list, String title, String body) {
+        if (TextUtils.isEmpty(body)) return;
+        list.addView(sectionHeader(title));
+        LinearLayout section = cardView();
+        TextView text = text(body, 16, TEXT_PRIMARY, false);
+        text.setLineSpacing(0, 1.2f);
+        text.setPadding(dp(16), dp(14), dp(16), dp(14));
+        section.addView(text);
+        list.addView(section);
+    }
+
+    /** A setting's title, with a "?" after it that explains the setting when {@code help} is set. */
+    private View titleWithHelp(String title, String help) {
+        if (TextUtils.isEmpty(help)) return text(title, 16, TEXT_PRIMARY, false);
+        LinearLayout titleRow = new LinearLayout(activity);
+        titleRow.setGravity(Gravity.CENTER_VERTICAL);
+        titleRow.addView(text(title, 16, TEXT_PRIMARY, false));
+        TextView button = text("?", 13, ACCENT, true);
+        button.setGravity(Gravity.CENTER);
+        GradientDrawable circle = new GradientDrawable();
+        circle.setShape(GradientDrawable.OVAL);
+        circle.setColor((ACCENT & 0x00FFFFFF) | 0x40000000);
+        button.setBackground(circle);
+        button.setContentDescription("What " + title + " does");
+        button.setOnClickListener(v -> showHelp(title, help));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(22), dp(22));
+        lp.leftMargin = dp(8);
+        titleRow.addView(button, lp);
+        return titleRow;
+    }
+
+    /** Slides up a sheet explaining a setting: its name, the explanation and a "Got it" button. */
+    private void showHelp(String title, String help) {
+        Dialog sheet = new Dialog(activity, android.R.style.Theme_DeviceDefault_Dialog_NoActionBar);
+        LinearLayout content = new LinearLayout(activity);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(dp(20), dp(10), dp(20), dp(20));
+        GradientDrawable shape = new GradientDrawable();
+        shape.setColor(CARD);
+        float r = dp(24);
+        shape.setCornerRadii(new float[]{r, r, r, r, 0, 0, 0, 0});
+        content.setBackground(shape);
+
+        View handle = new View(activity);
+        GradientDrawable handleShape = new GradientDrawable();
+        handleShape.setColor(TEXT_TERTIARY);
+        handleShape.setCornerRadius(dp(3));
+        handle.setBackground(handleShape);
+        LinearLayout.LayoutParams handleLp = new LinearLayout.LayoutParams(dp(36), dp(5));
+        handleLp.gravity = Gravity.CENTER_HORIZONTAL;
+        handleLp.bottomMargin = dp(14);
+        content.addView(handle, handleLp);
+
+        content.addView(text(title, 22, TEXT_PRIMARY, true));
+        TextView body = text(help, 16, TEXT_PRIMARY, false);
+        body.setLineSpacing(0, 1.2f);
+        body.setPadding(0, dp(14), 0, dp(18));
+        content.addView(body);
+
+        TextView done = text("Got it", 16, Color.WHITE, true);
+        done.setGravity(Gravity.CENTER);
+        done.setMinHeight(dp(48));
+        GradientDrawable pill = new GradientDrawable();
+        pill.setColor(ACCENT);
+        pill.setCornerRadius(dp(24));
+        done.setBackground(new RippleDrawable(ColorStateList.valueOf(0x40FFFFFF), pill, null));
+        done.setOnClickListener(v -> sheet.dismiss());
+        content.addView(done, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        sheet.setContentView(content);
+        Window window = sheet.getWindow();
+        if (window != null) {
+            window.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            window.setGravity(Gravity.BOTTOM);
+            window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+            window.setWindowAnimations(android.R.style.Animation_InputMethod);
+            window.setDimAmount(0.4f);
+        }
+        sheet.setCanceledOnTouchOutside(true);
+        sheet.show();
     }
 
     private void setLightweight(boolean lightweight) {
