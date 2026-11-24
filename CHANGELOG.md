@@ -1,3 +1,9 @@
+## [1.5.0-dev.1](https://github.com/southstar21dev/southstar21-patches/compare/v1.4.1-dev.1...v1.5.0-dev.1) (2026-11-24)
+
+### ✨ New Features
+
+* **Instagram:** Glass comments setting ([668c653](https://github.com/southstar21dev/southstar21-patches/commit/668c653caf149404ce8e620a84ce7de5f8352b8b))
+
 ## [1.4.1-dev.1](https://github.com/southstar21dev/southstar21-patches/compare/v1.4.0...v1.4.1-dev.1) (2026-11-24)
 
 ### 🐛 Bug Fixes
