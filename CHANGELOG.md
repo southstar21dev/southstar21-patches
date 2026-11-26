@@ -1,3 +1,9 @@
+## [1.5.0-dev.2](https://github.com/southstar21dev/southstar21-patches/compare/v1.5.0-dev.1...v1.5.0-dev.2) (2026-11-26)
+
+### 🐛 Bug Fixes
+
+* **Instagram:** Share and comments glass no longer breaks over SurfaceView videos ([8e28082](https://github.com/southstar21dev/southstar21-patches/commit/8e28082754957aed638327d943c15ffa08c4f427)), closes [#23](https://github.com/southstar21dev/southstar21-patches/issues/23)
+
 ## [1.5.0-dev.1](https://github.com/southstar21dev/southstar21-patches/compare/v1.4.1-dev.1...v1.5.0-dev.1) (2026-11-24)
 
 ### ✨ New Features
