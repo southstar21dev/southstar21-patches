@@ -19,6 +19,7 @@ import android.os.Build;
 import android.os.SystemClock;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewParent;
 
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
@@ -55,14 +56,25 @@ final class ReelsBlur {
     private final View root;
     private final float density;
     private final int pagerId, videoId, containerId, infoId, scrubberId;
-    /** Portrait videos up to this much shorter than the page are zoomed to fill it (wider ones keep their bars). */
-    private static final float MAX_FILL_SCALE = 1.25f;
+    /** How soft the band behind the status bar goes while it holds still through a swipe. */
+    private static final float BAND_BLUR_DP = 14f;
+    /** The last part of a swipe (of a page's height) over which the band comes into focus on the arriving reel. */
+    private static final float BAND_SETTLE = 0.3f;
+    /** How often the band's picture is copied while a reel rests (for the next swipe to hold). */
+    private static final long BAND_SNAPSHOT_MS = 250;
+    /** Portrait videos needing up to this much zoom to fill the screen are zoomed (wider ones keep their bars). */
+    private static final float MAX_FILL_SCALE = 1.4f;
+    /** As above, when they only fill the page below the status bar (Full screen off). */
+    private static final float MAX_PAGE_FILL_SCALE = 1.25f;
     /** Videos at least this tall for their width (9:16 is 1.78) count as portrait. */
     private static final float PORTRAIT_RATIO = 1.6f;
 
     private WeakReference<ViewGroup> pager;
     private long lastScan;
     private final WeakHashMap<View, Strip> strips = new WeakHashMap<>();
+    /** The video behind the status bar, and the container whose overlay holds it. */
+    private TopBand topBand;
+    private WeakReference<View> topHost;
     /** Views scrolled to lift what they hold above the strip, put back when the effect stops. */
     private final WeakHashMap<View, Boolean> lifted = new WeakHashMap<>();
     /** Seek bar hosts moved up above the strip, put back when the effect stops. */
@@ -109,11 +121,21 @@ final class ReelsBlur {
             return;
         }
         active = true;
+        boolean fullScreen = LiquidGlassNavBarPatch.REELS_FULL_SCREEN.get();
         pager.getLocationInWindow(location);
         int height = location[1] + pager.getHeight() - stripTop;
         if (height <= 0) {
             stop();
             return;
+        }
+        int pagerLeft = location[0];
+        int pagerTop = location[1];
+        // Where the pages rest. Pulling down on the first reel (to refresh) slides the whole pager
+        // down under Instagram's spinner; measured from there, the zoom grew for a taller screen
+        // and the status bar's band reached down into the gap. The pager's container stays put.
+        if (pager.getParent() instanceof View) {
+            ((View) pager.getParent()).getLocationInWindow(other);
+            pagerTop = Math.min(pagerTop, other[1]);
         }
         // The pages are the RecyclerView's children (ViewPager2's only child).
         ViewGroup list = (ViewGroup) pager.getChildAt(0);
@@ -128,45 +150,107 @@ final class ReelsBlur {
                     strips.put(video, strip);
                     video.getOverlay().add(strip);
                 }
-                fill(video);
+                fill(video, page, pagerTop, fullScreen);
                 strip.update(page, video, height);
             }
             lift(page, page.getHeight() - height);
         }
+        // An open sheet (the comments, say) shows the reel in a small player of its own above it,
+        // over the page; the band went on showing the full size reel underneath behind the clock.
+        if (fullScreen && !sheetOpen()) {
+            updateTopBand(pager, list, pagerLeft, pagerTop);
+        } else if (topBand != null) {
+            topBand.hide();
+        }
+    }
+
+    /** Puts the band over the strip of screen above the pages (see {@link TopBand}). */
+    private void updateTopBand(ViewGroup pager, ViewGroup list, int pagerLeft, int pagerTop) {
+        View host = topHost != null ? topHost.get() : null;
+        if (host == null || !host.isAttachedToWindow()) {
+            host = null;
+            for (ViewParent p = pager.getParent(); p instanceof View; p = p.getParent()) {
+                View v = (View) p;
+                v.getLocationInWindow(other);
+                if (other[1] <= 0) {
+                    host = v;
+                    break;
+                }
+            }
+            if (host == null) return;
+            if (topBand == null) topBand = new TopBand();
+            View old = topHost != null ? topHost.get() : null;
+            if (old != null) old.getOverlay().remove(topBand);
+            host.getOverlay().add(topBand);
+            topHost = new WeakReference<>(host);
+        }
+        if (pagerTop <= 0) {
+            topBand.hide();
+            return;
+        }
+        topBand.update(host, list, pagerLeft, pagerTop, pager.getWidth());
     }
 
     /**
-     * Instagram fits a 9:16 reel into the page, which now runs on behind the bar, so it got
-     * black bars above and below. Zoom it to fill the page instead, cropping its sides, as
-     * Instagram already did (a little) when the page stopped above the bar, and as iOS does.
+     * Full screen, as on iOS: Instagram fits a 9:16 reel into the page, which now runs on behind
+     * the bar, so it got black bars above and below. Zoom it to fill the whole screen instead, from
+     * behind the status bar down to the bottom edge, cropping its sides, as iOS does. The page
+     * starts below the status bar and clips there; {@link TopBand} shows the part above it.
      * <p>
      * Every layer of the video layout is zoomed, not just the player: Instagram moves its one
      * player to the incoming reel mid-scroll and shows a thumbnail in the outgoing one, which
      * would otherwise bring its black bars back (into the strip, too).
+     *
+     * Full screen off, it fills the page only, below the status bar, zoomed from its middle.
+     *
+     * @param pagerTop where the pages rest, in window coordinates (the status bar's bottom)
      */
-    private void fill(View video) {
+    private void fill(View video, View page, int pagerTop, boolean fullScreen) {
         if (!(video instanceof ViewGroup)) return;
         ViewGroup layout = (ViewGroup) video;
-        int pageH = layout.getHeight();
+        int pageH = page.getHeight();
+        // Where the video layout sits in the page (the same however far the page has scrolled).
+        video.getLocationInWindow(location);
+        page.getLocationInWindow(other);
+        int layoutTop = location[1] - other[1];
+        int screenH = pageH + (fullScreen ? Math.max(0, pagerTop) : 0);
+        float maxScale = fullScreen ? MAX_FILL_SCALE : MAX_PAGE_FILL_SCALE;
         for (int i = 0; i < layout.getChildCount(); i++) {
             View layer = layout.getChildAt(i);
             int w = layer.getWidth();
             int h = layer.getHeight();
             float scale = 1f;
-            if (layer.getVisibility() != View.GONE && w > 0 && h > 0 && pageH > h
-                    && h / (float) w >= PORTRAIT_RATIO) {
-                float want = pageH / (float) h;
-                if (want <= MAX_FILL_SCALE) scale = want;
+            float ty = 0f;
+            if (layer.getVisibility() != View.GONE && w > 0 && h > 0 && h / (float) w >= PORTRAIT_RATIO) {
+                float want = screenH / (float) h;
+                if (want >= 1f && want <= maxScale) {
+                    scale = want;
+                    // Zoomed from its top, which then goes to the top of the screen (or the page).
+                    ty = -(fullScreen ? pagerTop : 0) - (layoutTop + layer.getTop());
+                }
             }
-            if (layer.getScaleX() != scale || layer.getScaleY() != scale) {
+            if (layer.getScaleX() != scale || layer.getScaleY() != scale || layer.getPivotY() != 0f) {
                 layer.setPivotX(w / 2f);
-                // Instagram centers the layers in the page, so this fills it top to bottom.
-                layer.setPivotY(h / 2f);
+                layer.setPivotY(0f);
                 layer.setScaleX(scale);
                 layer.setScaleY(scale);
             }
-            if (scale != 1f) filled.put(layer, Boolean.TRUE);
+            if (layer.getTranslationY() != ty) layer.setTranslationY(ty);
+            if (scale != 1f || ty != 0f) filled.put(layer, Boolean.TRUE);
         }
+    }
+
+    private WeakReference<View> sheetPanel;
+
+    /** Whether one of Instagram's bottom sheets is open (its panel holds a sheet). */
+    private boolean sheetOpen() {
+        View panel = sheetPanel != null ? sheetPanel.get() : null;
+        if (panel == null || !panel.isAttachedToWindow()) {
+            int id = root.getResources().getIdentifier("layout_container_bottom_sheet", "id", PKG);
+            panel = id != 0 ? root.findViewById(id) : null;
+            sheetPanel = panel != null ? new WeakReference<>(panel) : null;
+        }
+        return panel instanceof ViewGroup && panel.isShown() && ((ViewGroup) panel).getChildCount() > 0;
     }
 
     /**
@@ -294,12 +378,14 @@ final class ReelsBlur {
             if (v != null) {
                 v.setScaleX(1f);
                 v.setScaleY(1f);
+                v.setTranslationY(0f);
             }
         }
         filled.clear();
         for (Strip strip : strips.values()) {
             if (strip != null) strip.hide();
         }
+        if (topBand != null) topBand.hide();
     }
 
     /** The Reels tab's pager, found again when Instagram replaces it. */
@@ -391,7 +477,7 @@ final class ReelsBlur {
             try {
                 rc.drawColor(Color.BLACK);
                 rc.translate(0, -(b.top - pad));
-                drawLayers(rc, video);
+                drawVideoLayers(rc, video);
             } finally {
                 backdrop.endRecording();
             }
@@ -419,28 +505,6 @@ final class ReelsBlur {
             canvas.restoreToCount(save);
         }
 
-        /**
-         * The video layout's layers (player, thumbnails), each placed and zoomed by hand: drawn
-         * through the layout itself, the outgoing reel's zoom went missing mid-scroll and the
-         * strip blurred the black bar below the unzoomed video.
-         */
-        private void drawLayers(Canvas rc, View video) {
-            if (!(video instanceof ViewGroup)) {
-                video.draw(rc);
-                return;
-            }
-            ViewGroup layout = (ViewGroup) video;
-            for (int i = 0; i < layout.getChildCount(); i++) {
-                View layer = layout.getChildAt(i);
-                if (layer.getVisibility() != View.VISIBLE || layer.getAlpha() == 0f) continue;
-                int save = rc.save();
-                rc.translate(layer.getLeft() + layer.getTranslationX(), layer.getTop() + layer.getTranslationY());
-                rc.scale(layer.getScaleX(), layer.getScaleY(), layer.getPivotX(), layer.getPivotY());
-                layer.draw(rc);
-                rc.restoreToCount(save);
-            }
-        }
-
         private void updateMasks(int h) {
             if (h == maskFor) return;
             maskFor = h;
@@ -465,6 +529,230 @@ final class ReelsBlur {
         @Override
         public int getOpacity() {
             return PixelFormat.TRANSLUCENT;
+        }
+    }
+
+    /**
+     * The video behind the status bar. The pages start below it and clip there (Instagram hides
+     * its header by sliding it out of the page, so they must keep clipping), so the zoomed video's
+     * top is drawn again here, sharp, in the overlay of the first container that reaches the top
+     * of the screen: the video of the page right under it, where it is on screen. Darkened a little, as Instagram's
+     * gradient under its header darkens the page below it.
+     */
+    private final class TopBand extends Drawable {
+        private final Paint tint = new Paint();
+        private final int[] at = new int[2];
+        private WeakReference<ViewGroup> list;
+        private int tintFor = -1;
+        /** The band's left edge and its bottom (the pages' top), in window coordinates. */
+        private int originX, seam;
+        /** How far a zoomed reel's video reaches above its page (the status bar's height). */
+        private int ext;
+        private WeakReference<View> host;
+        private final RenderNode live = new RenderNode("ReelsTopBand");
+        private final RenderNode held = new RenderNode("ReelsTopBandHeld");
+        /**
+         * What the band showed at rest, copied every {@link #BAND_SNAPSHOT_MS}: a swipe holds it
+         * (blurred) instead of showing the reels sliding past, and it dissolves into the reel
+         * that settles. Two bitmaps, so a copy in flight never tears the one shown.
+         */
+        private android.graphics.Bitmap snapshot, spare;
+        private boolean copying;
+        private long copiedAt;
+        private final Rect copyRect = new Rect();
+        private final android.os.Handler handler = new android.os.Handler(android.os.Looper.getMainLooper());
+        private final Paint bitmapPaint = new Paint(Paint.FILTER_BITMAP_FLAG);
+
+        void update(View host, ViewGroup list, int pagerLeft, int pagerTop, int width) {
+            this.list = new WeakReference<>(list);
+            this.host = new WeakReference<>(host);
+            host.getLocationInWindow(at);
+            int left = pagerLeft - at[0];
+            Rect b = getBounds();
+            int bottom = pagerTop - at[1];
+            if (b.left != left || b.top != -at[1] || b.right != left + width || b.bottom != bottom) {
+                setBounds(left, -at[1], left + width, bottom);
+            }
+            originX = pagerLeft;
+            seam = pagerTop;
+            ext = pagerTop + at[1];
+            invalidateSelf();
+        }
+
+        void hide() {
+            list = null;
+            setBounds(0, 0, 0, 0);
+        }
+
+        @Override
+        public void draw(Canvas canvas) {
+            ViewGroup list = this.list != null ? this.list.get() : null;
+            Rect b = getBounds();
+            int w = b.width();
+            int h = b.height();
+            if (list == null || w <= 0 || h <= 0 || !canvas.isHardwareAccelerated()) return;
+            if (tintFor != ext) {
+                tintFor = ext;
+                tint.setShader(new LinearGradient(0, ext, 0, 0, 0x4A000000, 0x60000000, Shader.TileMode.CLAMP));
+            }
+            int save = canvas.save();
+            canvas.translate(b.left, b.top);
+            canvas.clipRect(0, 0, w, h);
+            // From here on, window coordinates (x from the band's left edge).
+            canvas.translate(0, -(seam - ext));
+
+            // The reel nearest to resting under the band: the one showing, or the one a swipe is
+            // bringing in. It is drawn where it will rest, not where it is: the band shows where
+            // the swipe is heading, never the reels sliding past.
+            View target = null;
+            int dist = Integer.MAX_VALUE;
+            for (int i = 0; i < list.getChildCount(); i++) {
+                View page = list.getChildAt(i);
+                if (page.getVisibility() != View.VISIBLE) continue;
+                page.getLocationInWindow(at);
+                int d = Math.abs(at[1] - seam);
+                if (d < dist) {
+                    dist = d;
+                    target = page;
+                }
+            }
+            live.setPosition(0, 0, w, ext);
+            RecordingCanvas rc = live.beginRecording(w, ext);
+            try {
+                rc.translate(0, -(seam - ext));
+                rc.drawColor(Color.BLACK);
+                if (target != null) {
+                    target.getLocationInWindow(at);
+                    rc.translate(0, seam - at[1]);
+                    drawPage(rc, target);
+                }
+            } finally {
+                live.endRecording();
+            }
+
+            // Hold and settle. Live, the band showed the reels sliding past the status bar, a run
+            // of colors from two videos flicking by in a strip of their own. Now a swipe holds the
+            // band on what it showed at rest (copied every so often, blurred), and over the last
+            // stretch of the swipe the arriving reel comes into focus, tied to the swipe itself:
+            // fully there as it lands, with nothing held after.
+            int pageH = target != null ? target.getHeight() : 0;
+            float p = target == null || pageH == 0 ? 0f
+                    : Math.max(0f, Math.min(1f, 1f - dist / (BAND_SETTLE * pageH)));
+            boolean atRest = target != null && dist <= 1;
+            float e = p * p * (3f - 2f * p);
+
+            int bandSave = canvas.save();
+            canvas.translate(0, seam - ext);
+            canvas.clipRect(0, 0, w, ext);
+            if (atRest || snapshot == null) {
+                live.setRenderEffect(null);
+                canvas.drawRenderNode(live);
+                canvas.drawRect(0, 0, w, ext, tint);
+                if (atRest) maybeCopy(w);
+            } else {
+                float r = (1f - e) * BAND_BLUR_DP * density;
+                live.setRenderEffect(r >= 0.5f ? RenderEffect.createBlurEffect(r, r, Shader.TileMode.CLAMP) : null);
+                canvas.drawRenderNode(live);
+                canvas.drawRect(0, 0, w, ext, tint);
+                // The snapshot already has the tint in it.
+                if (e < 1f) {
+                    recordHeld(w);
+                    int layer = canvas.saveLayerAlpha(0, 0, w, ext, Math.round(255 * (1f - e)));
+                    canvas.drawRenderNode(held);
+                    canvas.restoreToCount(layer);
+                }
+            }
+            canvas.restoreToCount(bandSave);
+
+            canvas.restoreToCount(save);
+        }
+
+        /** The held snapshot, stretched over the band and blurred. */
+        private void recordHeld(int w) {
+            held.setPosition(0, 0, w, ext);
+            float r = BAND_BLUR_DP * density;
+            held.setRenderEffect(RenderEffect.createBlurEffect(r, r, Shader.TileMode.CLAMP));
+            RecordingCanvas rc = held.beginRecording(w, ext);
+            try {
+                rc.drawBitmap(snapshot, null, new Rect(0, 0, w, ext), bitmapPaint);
+            } finally {
+                held.endRecording();
+            }
+        }
+
+        /** Copies what the band shows now (at rest) into {@link #spare}, then swaps it in. */
+        private void maybeCopy(int w) {
+            long now = SystemClock.uptimeMillis();
+            if (copying || now - copiedAt < BAND_SNAPSHOT_MS || ext <= 0) return;
+            View host = this.host != null ? this.host.get() : null;
+            android.view.Window window = host != null ? BackdropSampler.windowOf(host.getContext()) : null;
+            if (window == null || !host.isAttachedToWindow()) return;
+            int bw = Math.max(1, w / 4), bh = Math.max(1, ext / 4);
+            if (spare == null || spare.getWidth() != bw || spare.getHeight() != bh) {
+                spare = android.graphics.Bitmap.createBitmap(bw, bh, android.graphics.Bitmap.Config.ARGB_8888);
+            }
+            copyRect.set(originX, seam - ext, originX + w, seam);
+            copiedAt = now;
+            copying = true;
+            final android.graphics.Bitmap target = spare;
+            try {
+                android.view.PixelCopy.request(window, copyRect, target, result -> {
+                    copying = false;
+                    if (result != android.view.PixelCopy.SUCCESS) return;
+                    spare = snapshot;
+                    snapshot = target;
+                }, handler);
+            } catch (Throwable t) {
+                copying = false;
+            }
+        }
+
+        /** {@code page}'s video where it is on screen, from its zoomed top down (window coordinates). */
+        private void drawPage(Canvas canvas, View page) {
+            View video = page != null && videoId != 0 ? page.findViewById(videoId) : null;
+            if (video == null) return;
+            int save = canvas.save();
+            page.getLocationInWindow(at);
+            canvas.clipRect(at[0] - originX, at[1] - seam, at[0] - originX + page.getWidth(), at[1] + page.getHeight());
+            video.getLocationInWindow(at);
+            canvas.translate(at[0] - originX, at[1]);
+            drawVideoLayers(canvas, video);
+            canvas.restoreToCount(save);
+        }
+
+        @Override
+        public void setAlpha(int alpha) {
+        }
+
+        @Override
+        public void setColorFilter(ColorFilter colorFilter) {
+        }
+
+        @Override
+        public int getOpacity() {
+            return PixelFormat.TRANSLUCENT;
+        }
+    }
+
+    /**
+     * The video layout's layers (player, thumbnails), each placed and zoomed by hand: drawn
+     * through the layout itself, the outgoing reel's zoom went missing mid-scroll and the
+     * strip blurred the black bar below the unzoomed video.
+     */
+    private static void drawVideoLayers(Canvas canvas, View video) {
+        if (!(video instanceof ViewGroup)) {
+            video.draw(canvas);
+            return;
+        }
+        ViewGroup layout = (ViewGroup) video;
+        for (int i = 0; i < layout.getChildCount(); i++) {
+            View layer = layout.getChildAt(i);
+            if (layer.getVisibility() != View.VISIBLE || layer.getAlpha() == 0f) continue;
+            int save = canvas.save();
+            canvas.translate(layer.getLeft() + layer.getTranslationX(), layer.getTop() + layer.getTranslationY());
+            canvas.scale(layer.getScaleX(), layer.getScaleY(), layer.getPivotX(), layer.getPivotY());
+            layer.draw(canvas);
+            canvas.restoreToCount(save);
         }
     }
 

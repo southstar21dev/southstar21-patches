@@ -203,6 +203,11 @@ final class NavbarPreview extends FrameLayout {
 
     /** The looping demo of one setting, for its "?" button. */
     static View demo(Activity activity, Setting setting) {
+        // No demo of their own: the explanation says it all.
+        if (setting == LiquidGlassNavBarPatch.REELS_FULL_SCREEN
+                || setting == LiquidGlassNavBarPatch.WHITE_HEADER_TITLE) {
+            return null;
+        }
         return new NavbarPreview(activity, setting);
     }
 

@@ -747,7 +747,8 @@ final class HeaderBlurController {
      */
     private void enforceTitle(Header h, View scroller, boolean trayShown) {
         if (h.header == h.wrapper) return;
-        boolean white = !trayShown && !storiesUnderHeader(h, scroller);
+        boolean white = LiquidGlassNavBarPatch.WHITE_HEADER_TITLE.get()
+                && !trayShown && !storiesUnderHeader(h, scroller);
         View title = titleTextId != 0 ? h.header.findViewById(titleTextId) : null;
         if (title instanceof TextView) {
             TextView text = (TextView) title;
