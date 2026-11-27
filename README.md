@@ -14,11 +14,11 @@
 <p align="center">
   <a href="https://morphe.software/add-source?github=southstar21dev/southstar21-patches"><picture>
     <source media="(prefers-color-scheme: dark)" srcset=".github/readme/button-add-to-morphe-dark.svg">
-    <img alt="Add to Morphe" src=".github/readme/button-add-to-morphe-light.svg" height="44">
+    <img alt="Add to Morphe" src=".github/readme/button-add-to-morphe-light.svg" height="88">
   </picture></a>
   <a href="CHANGELOG.md"><picture>
     <source media="(prefers-color-scheme: dark)" srcset=".github/readme/button-changelog-dark.svg">
-    <img alt="Changelog" src=".github/readme/button-changelog-light.svg" height="44">
+    <img alt="Changelog" src=".github/readme/button-changelog-light.svg" height="88">
   </picture></a>
 </p>
 
