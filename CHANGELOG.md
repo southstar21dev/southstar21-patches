@@ -1,3 +1,10 @@
+## [1.5.0-dev.4](https://github.com/southstar21dev/southstar21-patches/compare/v1.5.0-dev.3...v1.5.0-dev.4) (2026-11-27)
+
+### 🐛 Bug Fixes
+
+* **Instagram:** Feed header stays readable over posts and the stories tray ([f652668](https://github.com/southstar21dev/southstar21-patches/commit/f652668488b68e55c736559c3a4e3ec142eff7b8))
+* **Instagram:** Glass no longer glows brighter than the app in HDR mode ([b3ca394](https://github.com/southstar21dev/southstar21-patches/commit/b3ca3946985d47034f050126bbc4c096c37f41a3))
+
 ## [1.5.0-dev.3](https://github.com/southstar21dev/southstar21-patches/compare/v1.5.0-dev.2...v1.5.0-dev.3) (2026-11-27)
 
 ### 🐛 Bug Fixes
