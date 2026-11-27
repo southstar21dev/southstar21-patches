@@ -87,7 +87,7 @@
 ## Patches
 
 <!-- PATCHES_START -->
-**[v1.5.0-dev.6](https://github.com/southstar21dev/southstar21-patches/releases/tag/v1.5.0-dev.6)**, 12 patches. Click a patch for its settings and how it works.
+**[v1.5.0](https://github.com/southstar21dev/southstar21-patches/releases/tag/v1.5.0)**, 12 patches. Click a patch for its settings and how it works.
 
 <details open>
 <summary><b>Instagram</b>&nbsp;&nbsp;8 patches, 456.1.0.56.78</summary>
