@@ -12,14 +12,8 @@
 </p>
 
 <p align="center">
-  <a href="https://morphe.software/add-source?github=southstar21dev/southstar21-patches"><picture>
-    <source media="(prefers-color-scheme: dark)" srcset=".github/readme/button-add-to-morphe-dark.svg">
-    <img alt="Add to Morphe" src=".github/readme/button-add-to-morphe-light.svg" height="88">
-  </picture></a>
-  <a href="CHANGELOG.md"><picture>
-    <source media="(prefers-color-scheme: dark)" srcset=".github/readme/button-changelog-dark.svg">
-    <img alt="Changelog" src=".github/readme/button-changelog-light.svg" height="88">
-  </picture></a>
+  <a href="https://morphe.software/add-source?github=southstar21dev/southstar21-patches"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/readme/button-add-to-morphe-dark.svg"><img alt="Add to Morphe" src=".github/readme/button-add-to-morphe-light.svg" height="88"></picture></a>
+  <a href="CHANGELOG.md"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/readme/button-changelog-dark.svg"><img alt="Changelog" src=".github/readme/button-changelog-light.svg" height="88"></picture></a>
 </p>
 
 <p align="center">
@@ -41,10 +35,7 @@
     <img alt="Scrolling the Instagram feed under the Liquid Glass tab bar, then dragging the glass selection from Home to Search and back" src=".github/readme/instagram-light.gif" width="220">
   </picture>
   <img alt="YouTube Music Charts scrolling under the Liquid Glass tab bar with the docked mini player, then dragging the glass selection between tabs" src=".github/readme/youtube-music.gif" width="220">
-  <a href="https://star-history.com/#southstar21dev/southstar21-patches&Date"><picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=southstar21dev/southstar21-patches&type=Date&theme=dark">
-    <img alt="Star history" src="https://api.star-history.com/svg?repos=southstar21dev/southstar21-patches&type=Date" width="330">
-  </picture></a>
+  <a href="https://star-history.com/#southstar21dev/southstar21-patches&Date"><picture><source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=southstar21dev/southstar21-patches&type=Date&theme=dark"><img alt="Star history" src="https://api.star-history.com/svg?repos=southstar21dev/southstar21-patches&type=Date" width="330"></picture></a>
 </p>
 
 ## What you get
