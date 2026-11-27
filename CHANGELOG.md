@@ -1,3 +1,9 @@
+## [1.5.0-dev.6](https://github.com/southstar21dev/southstar21-patches/compare/v1.5.0-dev.5...v1.5.0-dev.6) (2026-11-27)
+
+### 🐛 Bug Fixes
+
+* **Spotify:** Patch description no longer mentions the green selected tab ([d12689b](https://github.com/southstar21dev/southstar21-patches/commit/d12689bf4486d368fa8df1675d421639325fc9c7))
+
 ## [1.5.0-dev.5](https://github.com/southstar21dev/southstar21-patches/compare/v1.5.0-dev.4...v1.5.0-dev.5) (2026-11-27)
 
 ### 🐛 Bug Fixes
