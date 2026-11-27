@@ -1,3 +1,9 @@
+## [1.5.0-dev.3](https://github.com/southstar21dev/southstar21-patches/compare/v1.5.0-dev.2...v1.5.0-dev.3) (2026-11-27)
+
+### 🐛 Bug Fixes
+
+* **Instagram:** Reels caption and buttons no longer vanish after switching tabs ([548361f](https://github.com/southstar21dev/southstar21-patches/commit/548361f57ecc05c8964f6853aeefe49118aba54a))
+
 ## [1.5.0-dev.2](https://github.com/southstar21dev/southstar21-patches/compare/v1.5.0-dev.1...v1.5.0-dev.2) (2026-11-26)
 
 ### 🐛 Bug Fixes
