@@ -81,6 +81,41 @@ final class ReelsBlur {
     private final WeakHashMap<View, Boolean> shifted = new WeakHashMap<>();
     /** Video containers zoomed to fill their page, put back when the effect stops. */
     private final WeakHashMap<View, Boolean> filled = new WeakHashMap<>();
+    /** Per video layer: the scale and offset last written, and Instagram's own (see instagramsTransform). */
+    private final WeakHashMap<View, float[]> transforms = new WeakHashMap<>();
+    private static final int WRITTEN_SCALE = 0, WRITTEN_TY = 1, BASE_SCALE = 2, BASE_TY = 3;
+    /** How far Instagram shrinks the reel before the zoom has wholly handed over to it. */
+    private static final float HANDOFF_SCALE = 0.15f;
+    /** The backdrop around the small reel: how soft, how much smaller it's recorded, and how much darker. */
+    private static final float BACKDROP_BLUR_DP = 40f;
+    private static final float BACKDROP_DOWNSCALE = 4f;
+    private static final int BACKDROP_TINT = 0x38000000;
+    /** More copies than this (a reel shrunk to almost nothing) and the backdrop stays black. */
+    private static final int MAX_TILES = 36;
+    /**
+     * The card a reel shrinks into above a sheet Instagram doesn't shrink it for (see card), made
+     * to match the one Instagram makes above the comments: its gaps to the status bar and to the
+     * sheet, its shape (width to height), how far the sheet must come up (of the reel's height)
+     * before it is cut down to that shape all the way, and its corners.
+     */
+    private static final float CARD_TOP_DP = 4f, CARD_BOTTOM_DP = 9f;
+    private static final float CARD_RATIO = 4f / 3f;
+    private static final float CARD_CUT_SPAN = 0.45f;
+    private static final float CARD_RADIUS_DP = 15f;
+    private final float[] cardGeometry = new float[4];
+    /** The Reels header, and the sheet dimmer kept off (see fadeForSheet). */
+    private WeakReference<View> headerView, fadedDimmer, scrimView, fadedScrim;
+    /** The reel's UI and the header, faded while the reel is small (see fadeReelUi). */
+    private final WeakHashMap<View, Boolean> faded = new WeakHashMap<>();
+    /** How far the reel showing has shrunk, last frame (see smallReel). */
+    private float smallBy;
+    /** Layers shaped as a card, with the outline each had before. */
+    private final WeakHashMap<View, CardOutline> cardOutlines = new WeakHashMap<>();
+    /** The blurred reel around the small one above a sheet, the video layout it's the background of, and its band. */
+    private SheetBackdrop backdrop;
+    private WeakReference<View> backdropVideo;
+    private SheetBand sheetBand;
+    private WeakReference<View> sheetBandHost;
     private final int[] location = new int[2];
     private final int[] other = new int[2];
     private final Rect visible = new Rect();
@@ -99,6 +134,14 @@ final class ReelsBlur {
         containerId = res.getIdentifier("clips_video_container", "id", PKG);
         infoId = res.getIdentifier("clips_media_info_component", "id", PKG);
         scrubberId = res.getIdentifier("scrubber", "id", PKG);
+    }
+
+    /**
+     * How far the reel showing has shrunk above a sheet (0: not at all, 1: wholly), for the bar to
+     * fade with the reel's own UI, as on iOS.
+     */
+    float smallReel() {
+        return smallBy;
     }
 
     /** Whether the ids it needs exist in this Instagram build. */
@@ -139,10 +182,14 @@ final class ReelsBlur {
         }
         // The pages are the RecyclerView's children (ViewPager2's only child).
         ViewGroup list = (ViewGroup) pager.getChildAt(0);
+        int sheetTop = sheetTop();
+        View shrunk = null;
+        float shrunkBy = 0f;
         for (int i = 0; i < list.getChildCount(); i++) {
             View page = list.getChildAt(i);
             if (!(page instanceof ViewGroup)) continue;
             View video = page.findViewById(videoId);
+            float pageShrunkBy = 0f;
             if (video != null) {
                 Strip strip = strips.get(video);
                 if (strip == null) {
@@ -150,33 +197,212 @@ final class ReelsBlur {
                     strips.put(video, strip);
                     video.getOverlay().add(strip);
                 }
-                fill(video, page, pagerTop, fullScreen);
-                strip.update(page, video, height);
+                float handoff = fill(video, page, pagerTop, fullScreen, cardSheetTop(sheetTop));
+                pageShrunkBy = handoff;
+                if (handoff > 0f) {
+                    // The sheet covers the bottom of the page, and the strip would only frost
+                    // the backdrop there.
+                    strip.hide();
+                    if (handoff > shrunkBy) {
+                        shrunk = video;
+                        shrunkBy = handoff;
+                    }
+                } else {
+                    strip.update(page, video, height);
+                }
             }
             lift(page, page.getHeight() - height);
+            fadeReelUi(page, pageShrunkBy);
         }
-        // An open sheet (the comments, say) shows the reel in a small player of its own above it,
-        // over the page; the band went on showing the full size reel underneath behind the clock.
-        if (fullScreen && !sheetOpen()) {
+        updateSheetBackdrop(pager, shrunk, shrunkBy);
+        fadeForSheet(shrunkBy, sheetTop >= 0);
+        smallBy = shrunkBy;
+        // While Instagram shows the reel small above a sheet, the screen above the sheet is the
+        // backdrop's, behind the clock too.
+        if (fullScreen && shrunk == null) {
             updateTopBand(pager, list, pagerLeft, pagerTop);
         } else if (topBand != null) {
             topBand.hide();
         }
     }
 
+    /**
+     * Fills the screen around the small reel Instagram shows above an open sheet (see
+     * {@link SheetBackdrop}), or takes the backdrop away when there is none.
+     *
+     * @param video   the video layout of the reel Instagram is shrinking, or null
+     * @param handoff how far Instagram has taken the reel over from the zoom (0 to 1)
+     */
+    private void updateSheetBackdrop(ViewGroup pager, View video, float handoff) {
+        View current = backdropVideo != null ? backdropVideo.get() : null;
+        if (current != null && current != video && current.getBackground() == backdrop) {
+            current.setBackground(null);
+        }
+        if (video == null) {
+            backdropVideo = null;
+            if (sheetBand != null) sheetBand.hide();
+            return;
+        }
+        if (backdrop == null) backdrop = new SheetBackdrop();
+        if (video.getBackground() != backdrop) {
+            // Only take the place of nothing: never drop a background Instagram put there.
+            if (video.getBackground() != null) return;
+            video.setBackground(backdrop);
+        }
+        backdropVideo = new WeakReference<>(video);
+        backdrop.update(video, handoff);
+
+        View old = sheetBandHost != null ? sheetBandHost.get() : null;
+        View host = old != null && old.isAttachedToWindow() ? old : bandHost(pager);
+        if (host == null) return;
+        if (sheetBand == null) sheetBand = new SheetBand();
+        if (old != host) {
+            if (old != null) old.getOverlay().remove(sheetBand);
+            host.getOverlay().add(sheetBand);
+            sheetBandHost = new WeakReference<>(host);
+        }
+        pager.getLocationInWindow(location);
+        sheetBand.update(host, video, location[1]);
+    }
+
+    /**
+     * As on iOS, the reel's own UI (caption, buttons, seek bar) and the Reels header go as the reel
+     * starts to shrink, and come back as it grows to full size again. Instagram starts shrinking
+     * it a moment before the sheet shows, and lets it grow back after the sheet has gone, so they
+     * stood over the small reel, then over the backdrop.
+     *
+     * @param page the reel's page
+     * @param by   how far it has shrunk (0 to 1)
+     */
+    private void fadeReelUi(View page, float by) {
+        View info = infoId != 0 ? page.findViewById(infoId) : null;
+        View infoHost = info != null && info.getParent() instanceof View && info.getParent() != page
+                ? (View) info.getParent() : null;
+        View scrubber = scrubberId != 0 ? page.findViewById(scrubberId) : null;
+        View scrubberHost = scrubber != null ? pageLevel(scrubber, page) : null;
+        fade(infoHost, by);
+        fade(scrubberHost, by);
+    }
+
+    /** Fades {@code view} out by {@code by}, keeping it to put back (see {@link #faded}). */
+    private void fade(View view, float by) {
+        if (view == null) return;
+        if (by <= 0f && !faded.containsKey(view)) return;
+        float alpha = 1f - by;
+        if (view.getAlpha() != alpha) view.setAlpha(alpha);
+        if (by > 0f) faded.put(view, Boolean.TRUE);
+        else faded.remove(view);
+    }
+
+    /**
+     * The header goes with the reel's own UI while the reel is small. And a sheet over a reel gets
+     * no dimmer: above the comments Instagram leaves the screen undimmed around the small reel, but
+     * other sheets (sharing) it dims, and it fades the dimmer in as the sheet starts up, before the
+     * sheet is high enough for the card: the reel darkened for a moment, then lit up again as the
+     * card formed. The dimmer stays off until it's out of sight: the sheet goes a frame or two
+     * before its dimmer does, and a dimmer put back then flashed the screen dark.
+     *
+     * @param shrunkBy  how far the reel has shrunk (0 to 1)
+     * @param sheetOpen whether a sheet is showing over the reel
+     */
+    private void fadeForSheet(float shrunkBy, boolean sheetOpen) {
+        View header = shrunkBy > 0f || faded.containsKey(headerView != null ? headerView.get() : null) ? header() : null;
+        fade(header, shrunkBy);
+        if (sheetOpen) {
+            View dimmer = dimmer();
+            if (dimmer != null) {
+                if (dimmer.getAlpha() != 0f) dimmer.setAlpha(0f);
+                fadedDimmer = new WeakReference<>(dimmer);
+            }
+            View scrim = statusScrim();
+            if (scrim != null) {
+                if (scrim.getAlpha() != 0f) scrim.setAlpha(0f);
+                fadedScrim = new WeakReference<>(scrim);
+            }
+            return;
+        }
+        View dimmer = fadedDimmer != null ? fadedDimmer.get() : null;
+        if (dimmer != null && dimmer.isShown()) return;
+        if (dimmer != null) dimmer.setAlpha(1f);
+        fadedDimmer = null;
+        // The status bar's dim goes with the sheet's, so it can't flash dark either.
+        View scrim = fadedScrim != null ? fadedScrim.get() : null;
+        if (scrim != null) scrim.setAlpha(1f);
+        fadedScrim = null;
+    }
+
+    /**
+     * Instagram's strip over the status bar: a plain view as tall as the status bar, last in its
+     * root layout, so over everything. Clear above the comments, but other sheets (sharing) dim it
+     * with their dimmer, which left a dark band over the backdrop behind the clock.
+     */
+    private View statusScrim() {
+        View cached = scrimView != null ? scrimView.get() : null;
+        if (cached != null && cached.isAttachedToWindow()) return cached;
+        scrimView = null;
+        View content = root.findViewById(android.R.id.content);
+        if (!(content instanceof ViewGroup)) return null;
+        // It sits beside Instagram's root layout in the content view (or, in another build, in it).
+        View scrim = statusScrimIn((ViewGroup) content);
+        if (scrim == null && ((ViewGroup) content).getChildCount() > 0
+                && ((ViewGroup) content).getChildAt(0) instanceof ViewGroup) {
+            scrim = statusScrimIn((ViewGroup) ((ViewGroup) content).getChildAt(0));
+        }
+        if (scrim != null) scrimView = new WeakReference<>(scrim);
+        return scrim;
+    }
+
+    private View statusScrimIn(ViewGroup g) {
+        int statusBar = statusBarHeight();
+        for (int i = g.getChildCount() - 1; i >= 0; i--) {
+            View v = g.getChildAt(i);
+            if (v.getClass() == View.class && v.getTop() == 0 && v.getWidth() == g.getWidth()
+                    && v.getHeight() > 0 && Math.abs(v.getHeight() - statusBar) <= 2) {
+                return v;
+            }
+        }
+        return null;
+    }
+
+    private int statusBarHeight() {
+        android.view.WindowInsets insets = root.getRootWindowInsets();
+        return insets != null ? insets.getInsets(android.view.WindowInsets.Type.statusBars()).top : -1;
+    }
+
+    /** Instagram's Reels header (the tabs and buttons above the reels), if it's showing. */
+    private View header() {
+        View header = headerView != null ? headerView.get() : null;
+        if (header == null || !header.isAttachedToWindow()) {
+            int id = root.getResources().getIdentifier("clips_viewer_action_bar", "id", PKG);
+            header = id != 0 ? root.findViewById(id) : null;
+            headerView = header != null ? new WeakReference<>(header) : null;
+        }
+        return header != null && header.isShown() ? header : null;
+    }
+
+    /** The open sheet's dimmer, beside it under the sheet's container. */
+    private View dimmer() {
+        View panel = sheetPanel != null ? sheetPanel.get() : null;
+        if (panel == null || !(panel.getParent() instanceof View)) return null;
+        int id = root.getResources().getIdentifier("background_dimmer", "id", PKG);
+        return id != 0 ? ((View) panel.getParent()).findViewById(id) : null;
+    }
+
+    /** The first container above the pager that reaches the top of the screen, for the bands. */
+    private View bandHost(ViewGroup pager) {
+        for (ViewParent p = pager.getParent(); p instanceof View; p = p.getParent()) {
+            View v = (View) p;
+            v.getLocationInWindow(other);
+            if (other[1] <= 0) return v;
+        }
+        return null;
+    }
+
     /** Puts the band over the strip of screen above the pages (see {@link TopBand}). */
     private void updateTopBand(ViewGroup pager, ViewGroup list, int pagerLeft, int pagerTop) {
         View host = topHost != null ? topHost.get() : null;
         if (host == null || !host.isAttachedToWindow()) {
-            host = null;
-            for (ViewParent p = pager.getParent(); p instanceof View; p = p.getParent()) {
-                View v = (View) p;
-                v.getLocationInWindow(other);
-                if (other[1] <= 0) {
-                    host = v;
-                    break;
-                }
-            }
+            host = bandHost(pager);
             if (host == null) return;
             if (topBand == null) topBand = new TopBand();
             View old = topHost != null ? topHost.get() : null;
@@ -202,19 +428,54 @@ final class ReelsBlur {
      * would otherwise bring its black bars back (into the strip, too).
      *
      * Full screen off, it fills the page only, below the status bar, zoomed from its middle.
+     * <p>
+     * Opening the comments (or another sheet) over a reel, Instagram shrinks it into the space
+     * above the sheet, rounded and cropped, as iOS does: it scales and moves the same video
+     * container, frame by frame as the sheet comes up. The zoom used to overwrite that every
+     * frame, leaving a cropped, oversized reel with black above it. Now what Instagram sets is
+     * read back each frame (whatever differs from what was written last is Instagram's), and the
+     * zoom hands over to it as the reel starts to shrink, and takes back over as it grows again.
+     * <p>
+     * Other sheets (sharing) Instagram opens over the full size reel, only dimmed. There the reel
+     * is shrunk the same way here: a card above the sheet (see {@link #card}).
      *
      * @param pagerTop where the pages rest, in window coordinates (the status bar's bottom)
+     * @param sheetTop where an open sheet's top shows, in window coordinates, or -1 with none
+     * @return how far the small reel has taken over from the zoom (0: not at all, 1: wholly)
      */
-    private void fill(View video, View page, int pagerTop, boolean fullScreen) {
-        if (!(video instanceof ViewGroup)) return;
+    private float fill(View video, View page, int pagerTop, boolean fullScreen, int sheetTop) {
+        if (!(video instanceof ViewGroup)) return 0f;
         ViewGroup layout = (ViewGroup) video;
         int pageH = page.getHeight();
         // Where the video layout sits in the page (the same however far the page has scrolled).
         video.getLocationInWindow(location);
         page.getLocationInWindow(other);
         int layoutTop = location[1] - other[1];
+        int layoutY = location[1];
+        boolean resting = Math.abs(other[1] - pagerTop) <= 1;
         int screenH = pageH + (fullScreen ? Math.max(0, pagerTop) : 0);
         float maxScale = fullScreen ? MAX_FILL_SCALE : MAX_PAGE_FILL_SCALE;
+
+        float handoff = 0f;
+        View container = null;
+        for (int i = 0; i < layout.getChildCount(); i++) {
+            View layer = layout.getChildAt(i);
+            float[] own = instagramsTransform(layer);
+            if (layer.getId() == containerId) {
+                container = layer;
+                if (own[BASE_SCALE] < 1f) handoff = smooth(Math.min(1f, (1f - own[BASE_SCALE]) / HANDOFF_SCALE));
+            }
+        }
+        // Instagram leaves this sheet's reel full size: shrink it into a card of its own.
+        int cardTop = pagerTop + Math.round(CARD_TOP_DP * density);
+        int room = sheetTop - Math.round(CARD_BOTTOM_DP * density) - cardTop;
+        boolean card = handoff == 0f && sheetTop >= 0 && resting && container != null
+                && container.getHeight() > 0 && room < container.getHeight();
+        if (card) {
+            card(container, room, cardTop - layoutY, cardGeometry);
+            handoff = smooth(Math.min(1f, (1f - cardGeometry[0]) / HANDOFF_SCALE));
+            if (handoff == 0f) card = false;
+        }
         for (int i = 0; i < layout.getChildCount(); i++) {
             View layer = layout.getChildAt(i);
             int w = layer.getWidth();
@@ -229,6 +490,20 @@ final class ReelsBlur {
                     ty = -(fullScreen ? pagerTop : 0) - (layoutTop + layer.getTop());
                 }
             }
+            float[] own = transforms.get(layer);
+            if (card && w > 0 && h > 0) {
+                card(layer, room, cardTop - layoutY, cardGeometry);
+                scale += (cardGeometry[0] - scale) * handoff;
+                ty += (cardGeometry[1] - ty) * handoff;
+                cardOutline(layer, cardGeometry[2], cardGeometry[3]);
+            } else {
+                dropCardOutline(layer);
+                if (handoff > 0f && own != null) {
+                    scale += (own[BASE_SCALE] - scale) * handoff;
+                    ty += (own[BASE_TY] - ty) * handoff;
+                }
+            }
+            // Instagram's own shrink works from the same pivot: its top, in the middle.
             if (layer.getScaleX() != scale || layer.getScaleY() != scale || layer.getPivotY() != 0f) {
                 layer.setPivotX(w / 2f);
                 layer.setPivotY(0f);
@@ -236,21 +511,156 @@ final class ReelsBlur {
                 layer.setScaleY(scale);
             }
             if (layer.getTranslationY() != ty) layer.setTranslationY(ty);
+            if (own != null) {
+                own[WRITTEN_SCALE] = scale;
+                own[WRITTEN_TY] = ty;
+            }
             if (scale != 1f || ty != 0f) filled.put(layer, Boolean.TRUE);
+        }
+        return handoff;
+    }
+
+    /**
+     * The card a reel shrinks into above a sheet Instagram leaves it full size under, as Instagram
+     * shrinks it above the comments: cut down to 3:4 (more of it the smaller it gets), fitted into
+     * the room between the status bar and the sheet, in the middle, its corners rounded.
+     *
+     * @param room how tall it can be, from {@code top}
+     * @param top  where its top goes, in the video layout's coordinates
+     * @param out  its scale, its translation, how much is cut off its top and bottom and its
+     *             corners' radius (both in its own pixels)
+     */
+    private void card(View layer, int room, int top, float[] out) {
+        float w = layer.getWidth();
+        float h = layer.getHeight();
+        float cut = Math.max(0f, h - w * CARD_RATIO) / 2f;
+        float q = Math.max(0f, Math.min(1f, (1f - room / h) / CARD_CUT_SPAN));
+        float crop = cut * q;
+        float scale = Math.max(0.05f, Math.min(1f, room / (h - 2f * crop)));
+        out[0] = scale;
+        // Scaled from its top: the cut-off top goes above `top`.
+        out[1] = top - layer.getTop() - crop * scale;
+        out[2] = crop;
+        out[3] = CARD_RADIUS_DP * density * q / scale;
+    }
+
+    private void cardOutline(View layer, float crop, float radius) {
+        CardOutline card = cardOutlines.get(layer);
+        if (card == null) {
+            card = new CardOutline(layer.getOutlineProvider(), layer.getClipToOutline());
+            cardOutlines.put(layer, card);
+        }
+        if (layer.getOutlineProvider() != card) layer.setOutlineProvider(card);
+        if (!layer.getClipToOutline()) layer.setClipToOutline(true);
+        if (card.crop != crop || card.radius != radius) {
+            card.crop = crop;
+            card.radius = radius;
+            layer.invalidateOutline();
         }
     }
 
-    private WeakReference<View> sheetPanel;
+    /** Gives a layer back the outline it had before it was a card, unless Instagram set another since. */
+    private void dropCardOutline(View layer) {
+        CardOutline card = cardOutlines.remove(layer);
+        if (card == null || layer.getOutlineProvider() != card) return;
+        layer.setOutlineProvider(card.original);
+        layer.setClipToOutline(card.clip);
+    }
 
-    /** Whether one of Instagram's bottom sheets is open (its panel holds a sheet). */
-    private boolean sheetOpen() {
+    /** A card's shape: its layer with {@code crop} off the top and bottom, rounded. */
+    private static final class CardOutline extends android.view.ViewOutlineProvider {
+        final android.view.ViewOutlineProvider original;
+        final boolean clip;
+        float crop, radius;
+
+        CardOutline(android.view.ViewOutlineProvider original, boolean clip) {
+            this.original = original;
+            this.clip = clip;
+        }
+
+        @Override
+        public void getOutline(View view, android.graphics.Outline outline) {
+            outline.setRoundRect(0, Math.round(crop), view.getWidth(), Math.round(view.getHeight() - crop), radius);
+        }
+    }
+
+    private WeakReference<View> sheetPanel, sheetView;
+    /** Where the open sheet first came to rest (-1 until it has), and how long it has held still. */
+    private int restTop = -1, lastSheetTop = -1, stillFrames;
+    /** Frames a sheet must hold still to count as having come to rest. */
+    private static final int REST_FRAMES = 3;
+
+    /**
+     * The sheet top a card is sized for: the sheet's own, but never above where it first came to
+     * rest. Pulled up from there, the sheet goes over the card, as the comments sheet goes over
+     * the reel Instagram shrinks, instead of shrinking it further; pulled down, the card grows.
+     */
+    private int cardSheetTop(int sheetTop) {
+        if (sheetTop < 0) {
+            restTop = -1;
+            lastSheetTop = -1;
+            stillFrames = 0;
+            return sheetTop;
+        }
+        if (restTop < 0) {
+            stillFrames = sheetTop == lastSheetTop ? stillFrames + 1 : 0;
+            if (stillFrames >= REST_FRAMES) restTop = sheetTop;
+        }
+        lastSheetTop = sheetTop;
+        return restTop >= 0 ? Math.max(sheetTop, restTop) : sheetTop;
+    }
+
+    /** Where the top of an open bottom sheet shows, in window coordinates, or -1 with none open. */
+    private int sheetTop() {
         View panel = sheetPanel != null ? sheetPanel.get() : null;
         if (panel == null || !panel.isAttachedToWindow()) {
             int id = root.getResources().getIdentifier("layout_container_bottom_sheet", "id", PKG);
             panel = id != 0 ? root.findViewById(id) : null;
             sheetPanel = panel != null ? new WeakReference<>(panel) : null;
         }
-        return panel instanceof ViewGroup && panel.isShown() && ((ViewGroup) panel).getChildCount() > 0;
+        if (!(panel instanceof ViewGroup) || !panel.isShown() || ((ViewGroup) panel).getChildCount() == 0) {
+            sheetView = null;
+            return -1;
+        }
+        View sheet = ((ViewGroup) panel).getChildAt(0);
+        if (!sheet.isShown() || sheet.getHeight() == 0) {
+            sheetView = null;
+            return -1;
+        }
+        // A sheet's first frame shows it laid out at the top, not yet moved down out of sight to
+        // slide up from there: taken as a sheet pulled all the way up, it made a card for a frame.
+        if (sheetView == null || sheetView.get() != sheet) {
+            sheetView = new WeakReference<>(sheet);
+            return -1;
+        }
+        sheet.getLocationInWindow(other);
+        return other[1];
+    }
+
+    /**
+     * The scale and offset Instagram itself wants on {@code layer}, kept up to date: a value that
+     * differs from what {@link #fill} wrote last was set by Instagram since.
+     */
+    private float[] instagramsTransform(View layer) {
+        float[] own = transforms.get(layer);
+        if (own == null) {
+            own = new float[]{Float.NaN, Float.NaN, 1f, 0f};
+            transforms.put(layer, own);
+        }
+        float scale = layer.getScaleX();
+        float ty = layer.getTranslationY();
+        if (scale != own[WRITTEN_SCALE] || ty != own[WRITTEN_TY]) {
+            // Only a shrink is Instagram's to keep (the zoom never goes below 1); anything else
+            // it sets, the zoom overrides as it always has.
+            boolean shrink = scale < 1f;
+            own[BASE_SCALE] = shrink ? scale : 1f;
+            own[BASE_TY] = shrink ? ty : 0f;
+        }
+        return own;
+    }
+
+    private static float smooth(float t) {
+        return t * t * (3f - 2f * t);
     }
 
     /**
@@ -364,6 +774,7 @@ final class ReelsBlur {
     }
 
     private void stop() {
+        smallBy = 0f;
         if (!active) return;
         active = false;
         for (View v : lifted.keySet()) {
@@ -376,12 +787,29 @@ final class ReelsBlur {
         shifted.clear();
         for (View v : filled.keySet()) {
             if (v != null) {
-                v.setScaleX(1f);
-                v.setScaleY(1f);
-                v.setTranslationY(0f);
+                // A reel Instagram has shrunk above a sheet goes back to how Instagram has it.
+                float[] own = transforms.get(v);
+                boolean shrunk = own != null && own[BASE_SCALE] < 1f;
+                v.setScaleX(shrunk ? own[BASE_SCALE] : 1f);
+                v.setScaleY(shrunk ? own[BASE_SCALE] : 1f);
+                v.setTranslationY(shrunk ? own[BASE_TY] : 0f);
             }
         }
         filled.clear();
+        transforms.clear();
+        for (View v : new ArrayList<>(cardOutlines.keySet())) {
+            if (v != null) dropCardOutline(v);
+        }
+        cardOutlines.clear();
+        fadeForSheet(0f, false);
+        for (View v : faded.keySet()) {
+            if (v != null) v.setAlpha(1f);
+        }
+        faded.clear();
+        View shrunk = backdropVideo != null ? backdropVideo.get() : null;
+        if (shrunk != null && shrunk.getBackground() == backdrop) shrunk.setBackground(null);
+        backdropVideo = null;
+        if (sheetBand != null) sheetBand.hide();
         for (Strip strip : strips.values()) {
             if (strip != null) strip.hide();
         }
@@ -716,6 +1144,201 @@ final class ReelsBlur {
             canvas.clipRect(at[0] - originX, at[1] - seam, at[0] - originX + page.getWidth(), at[1] + page.getHeight());
             video.getLocationInWindow(at);
             canvas.translate(at[0] - originX, at[1]);
+            drawVideoLayers(canvas, video);
+            canvas.restoreToCount(save);
+        }
+
+        @Override
+        public void setAlpha(int alpha) {
+        }
+
+        @Override
+        public void setColorFilter(ColorFilter colorFilter) {
+        }
+
+        @Override
+        public int getOpacity() {
+            return PixelFormat.TRANSLUCENT;
+        }
+    }
+
+    /**
+     * Behind the small reel Instagram shows above an open sheet, where it leaves black: the reel
+     * itself, mirrored out from each of its edges and blurred, as if it ran on past them. The
+     * background of the reel's video layout, so it lies under the reel and all of Instagram's UI
+     * (the mute button beside it); the page clips it where the page starts, and {@link SheetBand}
+     * draws it again behind the status bar. Recorded in window coordinates, at a fraction of the
+     * size: it is blurred anyway.
+     */
+    private final class SheetBackdrop extends Drawable {
+        final RenderNode node = new RenderNode("ReelsSheetBackdrop");
+        private final Paint tint = new Paint();
+        private final android.graphics.Outline outline = new android.graphics.Outline();
+        private final Rect clip = new Rect();
+        private final Rect outlineRect = new Rect();
+        private final int[] at = new int[2];
+        /** The reel as it shows, in window coordinates. */
+        final android.graphics.RectF reel = new android.graphics.RectF();
+        /** The video layout's place in the window, and the size of the window. */
+        int ox, oy, width, height;
+        private WeakReference<View> video;
+        private float alpha;
+        private float blurFor = -1f;
+
+        SheetBackdrop() {
+            tint.setColor(BACKDROP_TINT);
+        }
+
+        void update(View video, float handoff) {
+            this.video = new WeakReference<>(video);
+            alpha = handoff;
+            // The video changes every frame without the layout knowing: record it again.
+            invalidateSelf();
+        }
+
+        @Override
+        public void draw(Canvas canvas) {
+            View video = this.video != null ? this.video.get() : null;
+            if (video == null || !canvas.isHardwareAccelerated() || !measure(video)) return;
+            record(video);
+            int save = canvas.save();
+            canvas.translate(-ox, -oy);
+            paint(canvas);
+            canvas.restoreToCount(save);
+        }
+
+        /** Draws the backdrop over the window, onto a canvas in window coordinates. */
+        void paint(Canvas canvas) {
+            int save = alpha < 1f
+                    ? canvas.saveLayerAlpha(0, 0, width, height, Math.round(255 * alpha))
+                    : canvas.save();
+            canvas.save();
+            canvas.scale(BACKDROP_DOWNSCALE, BACKDROP_DOWNSCALE);
+            canvas.drawRenderNode(node);
+            canvas.restore();
+            canvas.drawRect(0, 0, width, height, tint);
+            canvas.restoreToCount(save);
+        }
+
+        /** Where the reel shows: its container's place and transform, cut to Instagram's rounded clip. */
+        private boolean measure(View video) {
+            View c = containerId != 0 ? video.findViewById(containerId) : null;
+            if (c == null || c.getParent() != video || c.getWidth() == 0 || c.getHeight() == 0) return false;
+            video.getLocationInWindow(at);
+            ox = at[0];
+            oy = at[1];
+            View rootView = video.getRootView();
+            width = rootView.getWidth();
+            height = rootView.getHeight();
+            clip.set(0, 0, c.getWidth(), c.getHeight());
+            if (c.getClipToOutline() && c.getOutlineProvider() != null) {
+                outline.setEmpty();
+                c.getOutlineProvider().getOutline(c, outline);
+                if (outline.getRect(outlineRect) && !outlineRect.isEmpty()) clip.set(outlineRect);
+            }
+            float px = c.getPivotX(), py = c.getPivotY();
+            float x0 = ox + c.getLeft() + c.getTranslationX() + px;
+            float y0 = oy + c.getTop() + c.getTranslationY() + py;
+            reel.set(x0 + (clip.left - px) * c.getScaleX(), y0 + (clip.top - py) * c.getScaleY(),
+                    x0 + (clip.right - px) * c.getScaleX(), y0 + (clip.bottom - py) * c.getScaleY());
+            return reel.width() >= 32 && reel.height() >= 32 && width > 0 && height > 0;
+        }
+
+        /**
+         * The reel tiled over the window from where it is, each copy flipped against the one next
+         * to it, so every edge of the reel runs on into its own mirror image.
+         */
+        private void record(View video) {
+            int nw = (int) Math.ceil(width / BACKDROP_DOWNSCALE);
+            int nh = (int) Math.ceil(height / BACKDROP_DOWNSCALE);
+            node.setPosition(0, 0, nw, nh);
+            float r = BACKDROP_BLUR_DP * density / BACKDROP_DOWNSCALE;
+            if (r != blurFor) {
+                blurFor = r;
+                node.setRenderEffect(RenderEffect.createBlurEffect(r, r, Shader.TileMode.CLAMP));
+            }
+            float rw = reel.width();
+            float rh = reel.height();
+            int ix0 = (int) Math.floor(-reel.left / rw);
+            int ix1 = (int) Math.floor((width - reel.left) / rw);
+            int iy0 = (int) Math.floor(-reel.top / rh);
+            int iy1 = (int) Math.floor((height - reel.top) / rh);
+            RecordingCanvas rc = node.beginRecording(nw, nh);
+            try {
+                rc.scale(1f / BACKDROP_DOWNSCALE, 1f / BACKDROP_DOWNSCALE);
+                rc.drawColor(Color.BLACK);
+                if ((ix1 - ix0 + 1) * (iy1 - iy0 + 1) > MAX_TILES) return;
+                for (int iy = iy0; iy <= iy1; iy++) {
+                    for (int ix = ix0; ix <= ix1; ix++) {
+                        float l = reel.left + ix * rw;
+                        float t = reel.top + iy * rh;
+                        int save = rc.save();
+                        rc.clipRect(l, t, l + rw, t + rh);
+                        rc.translate(l, t);
+                        rc.scale((ix & 1) != 0 ? -1f : 1f, (iy & 1) != 0 ? -1f : 1f, rw / 2f, rh / 2f);
+                        rc.translate(ox - reel.left, oy - reel.top);
+                        drawVideoLayers(rc, video);
+                        rc.restoreToCount(save);
+                    }
+                }
+            } finally {
+                node.endRecording();
+            }
+        }
+
+        @Override
+        public void setAlpha(int alpha) {
+        }
+
+        @Override
+        public void setColorFilter(ColorFilter colorFilter) {
+        }
+
+        @Override
+        public int getOpacity() {
+            return PixelFormat.TRANSLUCENT;
+        }
+    }
+
+    /**
+     * The {@link SheetBackdrop} behind the status bar, above the pages, in the overlay of the first
+     * container reaching the top of the screen (the pages clip below the status bar). The reel
+     * itself is drawn here too where it still reaches up behind the status bar, early in its
+     * shrink.
+     */
+    private final class SheetBand extends Drawable {
+        private final int[] at = new int[2];
+        private WeakReference<View> video;
+
+        /** @param pagerTop the pages' top (the status bar's bottom), in window coordinates */
+        void update(View host, View video, int pagerTop) {
+            this.video = new WeakReference<>(video);
+            host.getLocationInWindow(at);
+            int w = host.getRootView().getWidth();
+            Rect b = getBounds();
+            if (b.left != -at[0] || b.top != -at[1] || b.right != w - at[0] || b.bottom != pagerTop - at[1]) {
+                setBounds(-at[0], -at[1], w - at[0], pagerTop - at[1]);
+            }
+            invalidateSelf();
+        }
+
+        void hide() {
+            video = null;
+            setBounds(0, 0, 0, 0);
+        }
+
+        @Override
+        public void draw(Canvas canvas) {
+            View video = this.video != null ? this.video.get() : null;
+            Rect b = getBounds();
+            if (video == null || backdrop == null || b.isEmpty() || !canvas.isHardwareAccelerated()) return;
+            int save = canvas.save();
+            canvas.clipRect(b);
+            // From here on, window coordinates.
+            canvas.translate(b.left, b.top);
+            backdrop.paint(canvas);
+            canvas.clipRect(backdrop.reel);
+            canvas.translate(backdrop.ox, backdrop.oy);
             drawVideoLayers(canvas, video);
             canvas.restoreToCount(save);
         }

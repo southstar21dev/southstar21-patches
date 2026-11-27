@@ -254,8 +254,12 @@ final class LiquidGlassController implements ViewTreeObserver.OnPreDrawListener 
                     // scrolling mustn't move the strip or the caption above it.
                     int stripTop = location[1] + bar.getTop() + Math.round(glass.getPill().top) - dp(REELS_STRIP_ABOVE_PILL_DP);
                     reelsBlur.onPreDraw(on, stripTop);
+                    // The bar goes with the reel's own UI while the reel is small above a sheet.
+                    float alpha = 1f - reelsBlur.smallReel();
+                    if (bar.getAlpha() != alpha) bar.setAlpha(alpha);
                 } catch (Throwable t) {
                     reelsBlur = null;
+                    bar.setAlpha(1f);
                     android.util.Log.e(LiquidGlassNavBarPatch.TAG, "Disabling the Reels blur", t);
                 }
             }
