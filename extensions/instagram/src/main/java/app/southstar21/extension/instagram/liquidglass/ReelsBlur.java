@@ -199,21 +199,41 @@ final class ReelsBlur {
         View scrubber = scrubberId != 0 ? page.findViewById(scrubberId) : null;
         View scrubberHost = scrubber != null ? pageLevel(scrubber, page) : null;
         if (scrubberHost != null && scrubber.isShown() && scrubber.getHeight() > 0) {
-            scrubber.getLocationInWindow(location);
-            int bottom = location[1] - other[1] + scrubber.getHeight() - Math.round(scrubberHost.getTranslationY());
-            lowest = Math.max(lowest, bottom);
+            // From the layout, not from where it shows. Coming back to Reels, Litho moves the seek
+            // bar's frame back to the page bottom (see undoLithoOffset), where the host's lift no
+            // longer moves it. Measured on screen, each frame's lift then read as the bar still
+            // being that much too low, and the lift grew by as much every frame, scrolling the
+            // caption and the buttons thousands of pixels out of sight.
+            lowest = Math.max(lowest, layoutBottom(scrubber, page));
         }
 
-        int by = lowest == Integer.MIN_VALUE ? 0 : Math.max(0, lowest - stripTop);
+        // Nothing can end below the page, so a lift past this would only push things away.
+        int max = Math.max(0, page.getHeight() - stripTop);
+        int by = lowest == Integer.MIN_VALUE ? 0 : Math.min(max, Math.max(0, lowest - stripTop));
         if (infoHost != null) {
             if (infoHost.getScrollY() != by) infoHost.setScrollY(by);
             lifted.put(infoHost, Boolean.TRUE);
         }
-        // The seek bar sits in frames barely taller than itself (scrolling them would clip it),
-        // so its page-sized host is moved instead. Nothing in it is animated by Litho.
+        // The seek bar sits in frames barely taller than itself (scrolling them would clip it,
+        // and touches would miss it), so its page-sized host is moved instead.
         if (scrubberHost != null) {
             if (scrubberHost.getTranslationY() != -by) scrubberHost.setTranslationY(-by);
             shifted.put(scrubberHost, Boolean.TRUE);
+            undoLithoOffset(scrubber, scrubberHost, by);
+        }
+    }
+
+    /**
+     * Instagram briefly lays the page out shorter on every tab switch, so coming back to Reels
+     * Litho animates the seek bar's frame to its new place. Litho places animated views by their
+     * ancestors' getY(), which counts the host's lift, so the frame ends its move translated down
+     * by exactly the lift: the seek bar sits back at the page bottom, behind the strip and the
+     * bar. Undo that leftover. A frame Litho is still animating only matches it at the very end.
+     */
+    private static void undoLithoOffset(View scrubber, View host, int by) {
+        if (by == 0) return;
+        for (View v = scrubber; v != host && v.getParent() instanceof View; v = (View) v.getParent()) {
+            if (v.getTranslationY() != 0f && Math.abs(v.getTranslationY() - by) <= 2f) v.setTranslationY(0f);
         }
     }
 
@@ -229,6 +249,18 @@ final class ReelsBlur {
             v = parent;
         }
         return v.getParent() == page ? v : null;
+    }
+
+    /**
+     * Where {@code view} ends in {@code page}'s coordinates going by layout alone, leaving out
+     * every translation and scroll on the way (the lift's own included).
+     */
+    private static int layoutBottom(View view, View page) {
+        int y = view.getHeight();
+        for (View v = view; v != page && v.getParent() instanceof View; v = (View) v.getParent()) {
+            y += v.getTop();
+        }
+        return y;
     }
 
     /**
