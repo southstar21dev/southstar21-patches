@@ -338,6 +338,10 @@ YouTube Music gets the same menu, in its dark colors, behind a sliders button ne
 
 Bug reports, ideas and code are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for how to report a bug, request a feature, build the patches and add your own.
 
+## Credits
+
+The southstar21 style glass drop is adapted from [AndroidLiquidGlass](https://github.com/Kyant0/AndroidLiquidGlass) by Kyant, under the Apache License 2.0: its lens shader, the drop's movement and the pressed highlight. See [NOTICE](NOTICE).
+
 ## License
 
 Free software under the [GNU General Public License v3.0](LICENSE), based on the [Morphe patches template](https://github.com/MorpheApp/morphe-patches-template). See [NOTICE](NOTICE) for the Morphe name restriction.

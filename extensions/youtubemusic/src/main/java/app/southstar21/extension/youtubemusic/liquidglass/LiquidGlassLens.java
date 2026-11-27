@@ -1,3 +1,10 @@
+/*
+ * Portions of this file are adapted from Kyant0/AndroidLiquidGlass
+ * (https://github.com/Kyant0/AndroidLiquidGlass), Copyright 2025 Kyant, licensed under the
+ * Apache License, Version 2.0 (see LICENSES/AndroidLiquidGlass-Apache-2.0.txt): the lens shader
+ * (Lens.kt) and the drop's movement (LiquidBottomTabs.kt). Changed for this project: ported from
+ * Kotlin and Compose to Java, Android Views and AGSL, and adjusted as noted in the comments below.
+ */
 package app.southstar21.extension.youtubemusic.liquidglass;
 
 import android.annotation.SuppressLint;
