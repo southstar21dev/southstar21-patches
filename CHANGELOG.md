@@ -1,3 +1,13 @@
+## [1.5.0-dev.5](https://github.com/southstar21dev/southstar21-patches/compare/v1.5.0-dev.4...v1.5.0-dev.5) (2026-11-27)
+
+### 🐛 Bug Fixes
+
+* **Instagram:** Reels shrink into a card above the comments and share sheets ([ad756f5](https://github.com/southstar21dev/southstar21-patches/commit/ad756f59181ecf7a268d498d978922e83e3c97f1))
+
+### ✨ New Features
+
+* **Instagram:** Full screen Reels, with switches for it and the white title ([ac9a5be](https://github.com/southstar21dev/southstar21-patches/commit/ac9a5be1934ffe0e00d3b97c899e06a22c1c6f94))
+
 ## [1.5.0-dev.4](https://github.com/southstar21dev/southstar21-patches/compare/v1.5.0-dev.3...v1.5.0-dev.4) (2026-11-27)
 
 ### 🐛 Bug Fixes
