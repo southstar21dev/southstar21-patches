@@ -1093,6 +1093,12 @@ final class MiniPlayerGlass implements ViewTreeObserver.OnPreDrawListener {
          * whenever the backdrop is drawn (the page and each glass row show it).
          */
         private final android.graphics.RenderNode[] blurred = new android.graphics.RenderNode[2];
+        /**
+         * The same covers as finished bitmaps (where {@link BlurredCover} can make them): drawn
+         * wherever the backdrop shows, which a blur node would render again each time.
+         */
+        private final android.graphics.Bitmap[] bitmaps = new android.graphics.Bitmap[2];
+        private final Paint bitmapPaint = new Paint(Paint.FILTER_BITMAP_FLAG);
         private int current;
         private long fadeStart = -FADE_MS;
         private static final long FADE_MS = 450;
@@ -1106,7 +1112,8 @@ final class MiniPlayerGlass implements ViewTreeObserver.OnPreDrawListener {
         }
 
         boolean hasBackdrop() {
-            return backdrops[current] != null && backdrops[current].hasDisplayList();
+            return bitmaps[current] != null
+                    || (backdrops[current] != null && backdrops[current].hasDisplayList());
         }
 
         /** Whether the new backdrop is still fading in. */
@@ -1142,7 +1149,7 @@ final class MiniPlayerGlass implements ViewTreeObserver.OnPreDrawListener {
                     // full one): replaces the one fading in, the fade still starting from the old song.
                     record(current, a);
                 } else {
-                    boolean had = backdrops[current].hasDisplayList();
+                    boolean had = hasBackdrop();
                     current ^= 1;
                     record(current, a);
                     fadeStart = had ? SystemClock.uptimeMillis() : -FADE_MS;
@@ -1175,6 +1182,13 @@ final class MiniPlayerGlass implements ViewTreeObserver.OnPreDrawListener {
             } finally {
                 cover.endRecording();
             }
+            // Rendered once into a bitmap where that works; the node is only the fallback.
+            bitmaps[index] = BlurredCover.render(cover, w, h);
+            if (bitmaps[index] != null) {
+                cover.discardDisplayList();
+                backdrops[index].discardDisplayList();
+                return;
+            }
             android.graphics.RenderNode backdrop = backdrops[index];
             backdrop.setPosition(0, 0, w, h);
             android.graphics.RecordingCanvas bc = backdrop.beginRecording(w, h);
@@ -1205,18 +1219,32 @@ final class MiniPlayerGlass implements ViewTreeObserver.OnPreDrawListener {
 
         @android.annotation.SuppressLint("NewApi")
         private void paintBackdrop(Canvas canvas) {
-            android.graphics.RenderNode now = backdrops[current], before = backdrops[current ^ 1];
-            if (now == null || backdropAlpha <= 0f || !now.hasDisplayList()) return;
+            int now = current, before = current ^ 1;
+            if (backdropAlpha <= 0f || !drawable(now)) return;
             float t = Math.min(1f, (SystemClock.uptimeMillis() - fadeStart) / (float) FADE_MS);
             Rect b = getBounds();
-            if (t < 1f && before.hasDisplayList()) {
-                before.setAlpha(backdropAlpha);
-                drawScaled(canvas, before, b);
-                now.setAlpha(backdropAlpha * t);
+            if (t < 1f && drawable(before)) {
+                drawSlot(canvas, before, backdropAlpha, b);
+                drawSlot(canvas, now, backdropAlpha * t, b);
             } else {
-                now.setAlpha(backdropAlpha);
+                drawSlot(canvas, now, backdropAlpha, b);
             }
-            drawScaled(canvas, now, b);
+        }
+
+        private boolean drawable(int index) {
+            return bitmaps[index] != null || (backdrops[index] != null && backdrops[index].hasDisplayList());
+        }
+
+        @android.annotation.SuppressLint("NewApi")
+        private void drawSlot(Canvas canvas, int index, float alpha, Rect b) {
+            android.graphics.Bitmap bitmap = bitmaps[index];
+            if (bitmap != null) {
+                bitmapPaint.setAlpha(Math.round(alpha * 255));
+                canvas.drawBitmap(bitmap, null, b, bitmapPaint);
+                return;
+            }
+            backdrops[index].setAlpha(alpha);
+            drawScaled(canvas, backdrops[index], b);
         }
 
         @android.annotation.SuppressLint("NewApi")

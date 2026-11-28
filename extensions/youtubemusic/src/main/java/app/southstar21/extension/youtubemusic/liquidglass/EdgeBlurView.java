@@ -36,9 +36,6 @@ final class EdgeBlurView extends View {
     private static final int DOWNSAMPLE = 8;
 
     private RenderNode backdrop;
-    /** The finished effect, in a small layer of its own (see drawEffect). */
-    private RenderNode effect;
-    private final Paint holePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private int maskHeight = -1;
     private boolean maskDark;
     private boolean dark;
@@ -50,7 +47,6 @@ final class EdgeBlurView extends View {
         setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
         setWillNotDraw(false);
         maskPaint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.DST_IN));
-        holePaint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.CLEAR));
     }
 
     /** Copies of the video surfaces under the bar, drawn into their holes; null for none. */
@@ -116,12 +112,11 @@ final class EdgeBlurView extends View {
     }
 
     /**
-     * The whole effect in one small layer: the blurred backdrop, the darkening fade over it and
-     * the hole for the docked player. The layer is drawn again only when one of them changes;
-     * every other frame the app draws, the GPU puts the finished layer on screen, scaled up.
-     * (Drawn straight into the view, the fade covered the whole width at full size every frame,
-     * and the hole was a path clip with a pass of its own. Small, the hole's edge comes out a
-     * little soft, which the docked art's own ring covers.)
+     * The effect is one node: the blurred, faded and darkened backdrop in a small layer of its own
+     * (see recordBackdrop), recorded again only when what's behind may have changed. Every other
+     * frame the app draws, the GPU puts the finished layer on screen, scaled up. The docked
+     * player's hole is a clip on the way out, which after the blur keeps its edge sharp (the
+     * hole can't be part of the layer: the blur would fill it in again).
      */
     private void drawEffect(Canvas canvas, int w, int h) {
         // Recorded again only when what's behind may have moved: the hole following the docked
@@ -129,26 +124,26 @@ final class EdgeBlurView extends View {
         boolean reuse = !backdropStale && w == recordedW && h == recordedH
                 && backdrop != null && backdrop.hasDisplayList();
         boolean blurred = reuse || recordBackdrop(w, h);
-        if (effect == null) {
-            effect = new RenderNode("LiquidGlassEdge");
-            effect.setUseCompositingLayer(true, null);
-        }
-        int sw = (w + DOWNSAMPLE - 1) / DOWNSAMPLE;
-        int sh = (h + DOWNSAMPLE - 1) / DOWNSAMPLE;
-        effect.setPosition(0, 0, sw, sh);
-        RecordingCanvas ec = effect.beginRecording(sw, sh);
-        try {
-            if (blurred) ec.drawRenderNode(backdrop);
-            ec.scale(1f / DOWNSAMPLE, 1f / DOWNSAMPLE);
-            ec.drawRect(0, 0, w, h, fadePaint);
-            if (!hole.isEmpty()) ec.drawPath(holePath, holePaint);
-        } finally {
-            effect.endRecording();
-        }
         int save = canvas.save();
+        if (!hole.isEmpty()) canvas.clipOutPath(holePath);
+        if (!blurred) {
+            // Nothing to blur yet: the fade alone.
+            canvas.drawRect(0, 0, w, h, fadePaint);
+            canvas.restoreToCount(save);
+            return;
+        }
         canvas.scale(DOWNSAMPLE, DOWNSAMPLE);
-        canvas.drawRenderNode(effect);
+        canvas.drawRenderNode(backdrop);
         canvas.restoreToCount(save);
+    }
+
+    /**
+     * The bar's slide fades this view, which has one drawing op (the layer): the fade goes
+     * straight onto it, without an offscreen pass the size of the view first.
+     */
+    @Override
+    public boolean hasOverlappingRendering() {
+        return false;
     }
 
     /**
@@ -156,8 +151,9 @@ final class EdgeBlurView extends View {
      * mask and blurred. The blur is wide, so it's recorded at an eighth of the size on each side,
      * with no visible difference once blurred: far fewer pixels to draw and blur, and a blur
      * small enough for the GPU to do in two passes (a wider one first scales down and back up).
-     * The mask is applied in the same small layer rather than in an offscreen pass the size of
-     * the view on every frame. False if there's nothing to record.
+     * The mask and the darkening fade are drawn in the same small layer, before the blur (both
+     * are smooth, so the blur changes nothing visible), rather than in passes of their own.
+     * False if there's nothing to record.
      */
     private boolean recordBackdrop(int w, int h) {
         if (!(getParent() instanceof ViewGroup)) return false;
@@ -202,6 +198,8 @@ final class EdgeBlurView extends View {
             rc.restoreToCount(content);
             // Fade the blurred copy in from the top so the blur ramps up progressively.
             rc.drawRect(0, 0, w, h, maskPaint);
+            // Then the darkening fade over it.
+            rc.drawRect(0, 0, w, h, fadePaint);
         } finally {
             backdrop.endRecording();
         }
