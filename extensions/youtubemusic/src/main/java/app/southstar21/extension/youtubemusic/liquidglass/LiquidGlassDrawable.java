@@ -188,7 +188,25 @@ final class LiquidGlassDrawable extends Drawable {
 
     void setSnapshots(SurfaceSnapshots snapshots) {
         this.snapshots = snapshots;
+        refreshBackdrop();
     }
+
+    /**
+     * What's behind the glass may have changed: record it again on the next draw. Other redraws
+     * (the lens glow, the tab icons, the tint easing) reuse the backdrop as it was recorded.
+     */
+    void refreshBackdrop() {
+        backdropStale = true;
+        lightStale = true;
+        invalidateSelf();
+        // What's under the song bar is in the tab bar's recording (see shareBackdrop).
+        if (sharedFrom != null) sharedFrom.refreshBackdrop();
+    }
+
+    /** Set when the backdrop must be recorded again (kept apart for the two kinds of glass). */
+    private boolean backdropStale = true, lightStale = true;
+    /** The glass mode the last draw used, to record again when the setting flips. */
+    private boolean drawnLightweight;
 
     SurfaceSnapshots snapshots() {
         return snapshots;
@@ -369,12 +387,23 @@ final class LiquidGlassDrawable extends Drawable {
     @Override
     public void draw(Canvas canvas) {
         style = styleSource.get();
+        if (style.lightweight() != drawnLightweight) {
+            drawnLightweight = style.lightweight();
+            backdropStale = true;
+            lightStale = true;
+        }
         getPill();
         if (pill.width() <= 0 || pill.height() <= 0) return;
         float radius = cornerRadius();
         stepTint();
 
         if (style.lightweight()) {
+            // The song bar's glass, drawn by the tab bar's (see shareBackdrop).
+            if (sharedFrom != null) {
+                if (sharedFrom.drawsGuest(this)) return;
+                // It drew this one last time, which it can't now: drop that copy.
+                if (sharedFrom.guestDrawn) sharedFrom.invalidateSelf();
+            }
             drawLightweight(canvas, radius);
             drawGlow(canvas, radius);
             if (style.rim > 0f) drawRim(canvas, radius);
@@ -419,7 +448,13 @@ final class LiquidGlassDrawable extends Drawable {
     /** The content behind the pill, blurred and frosted by its RenderEffect. */
     private RenderNode lightNode;
     private float lightBlur = -1f;
-    private final android.graphics.Path lightPath = new android.graphics.Path();
+    /** What lightNode was recorded for: its area, and the theme. */
+    private final RectF lightRecordedArea = new RectF();
+    private boolean lightDark;
+    /** Clips the blurred backdrop to the pill by its outline (a mask pass less than clipPath). */
+    private RenderNode lightClip;
+    private final Outline lightOutline = new Outline();
+    private final Paint basePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final RectF lightArea = new RectF();
     private final RectF shadowRect = new RectF();
     private final Paint shadowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -427,6 +462,13 @@ final class LiquidGlassDrawable extends Drawable {
     /** The pill's top and bottom and the theme the sheen's gradient was made for. */
     private float sheenTop = Float.NaN, sheenBottom = Float.NaN;
     private boolean sheenDark;
+    private int sheenFill;
+    /**
+     * The lightweight backdrop is recorded this many times smaller on each side and blurred at
+     * that size: once blurred it looks the same, and a small blur is one quick pass where a wide
+     * one is several (the GPU scales a wide blur down and back up in steps).
+     */
+    private static final int LIGHT_DOWNSAMPLE = 4;
 
     /**
      * The glass drawn simply: what's behind the pill through one blur (and a color matrix),
@@ -437,31 +479,78 @@ final class LiquidGlassDrawable extends Drawable {
      * would show sharp through the glass.
      */
     private void drawLightweight(Canvas canvas, float radius) {
-        drawPaintedShadow(canvas, radius);
+        LiquidGlassDrawable guest = sharedWith;
+        boolean share = guest != null && canvas.isHardwareAccelerated() && canShare(guest);
+        float guestRadius = 0f;
+        if (share) {
+            guest.style = guest.styleSource.get();
+            guestPillInHost(guest, guestPill);
+            guestRadius = guest.cornerRadius();
+            guest.stepTint();
+        }
+        if (share != guestDrawn || share && !guestPill.equals(guestDrawnPill)) {
+            // The song bar draws (or stops drawing) its own glass to match.
+            guest.host.invalidate();
+        }
+        guestDrawn = share;
+        if (share) guestDrawnPill.set(guestPill);
+        float gx = share ? guestOffsetX(guest) : 0f, gy = share ? guestOffsetY(guest) : 0f;
 
-        float blur = style.blurDp * density;
-        if (blur > 0f) {
-            lightPath.reset();
-            lightPath.addRoundRect(pill, radius, radius, android.graphics.Path.Direction.CW);
+        drawPaintedShadow(canvas, radius);
+        if (share) {
             int save = canvas.save();
-            canvas.clipPath(lightPath);
-            boolean blurred = Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE
-                    && canvas.isHardwareAccelerated() && drawLightBackdrop(canvas, blur);
-            if (!blurred) canvas.drawColor(dark ? Color.BLACK : Color.WHITE);
+            canvas.translate(gx, gy);
+            guest.drawPaintedShadow(canvas, guestRadius);
             canvas.restoreToCount(save);
         }
 
-        tintPaint.setColor(materialColor(Math.round(255 * currentTint())));
-        canvas.drawRoundRect(pill, radius, radius, tintPaint);
+        float blur = style.blurDp * density;
+        if (blur > 0f) {
+            boolean blurred = Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE
+                    && canvas.isHardwareAccelerated()
+                    && drawLightBackdrop(canvas, blur, radius, share ? guest : null, guestRadius);
+            if (!blurred) {
+                basePaint.setColor(dark ? Color.BLACK : Color.WHITE);
+                canvas.drawRoundRect(pill, radius, radius, basePaint);
+                if (share) canvas.drawRoundRect(guestPill, guestRadius, guestRadius, basePaint);
+            }
+        }
 
-        if (pill.top != sheenTop || pill.bottom != sheenBottom || dark != sheenDark) {
+        drawFill(canvas, radius);
+        if (share) {
+            int save = canvas.save();
+            canvas.translate(gx, gy);
+            guest.drawFill(canvas, guestRadius);
+            canvas.restoreToCount(save);
+        }
+    }
+
+    /** The fill and the sheen over it in one pass, in the pill. */
+    private void drawFill(Canvas canvas, float radius) {
+        // A gradient from the sheen laid over the fill at the top down to the plain fill at the bottom.
+        int fill = materialColor(Math.round(255 * currentTint()));
+        if (pill.top != sheenTop || pill.bottom != sheenBottom || dark != sheenDark || fill != sheenFill) {
             sheenTop = pill.top;
             sheenBottom = pill.bottom;
             sheenDark = dark;
+            sheenFill = fill;
+            int sheen = Color.argb(dark ? 0x1A : 0x59, 0xFF, 0xFF, 0xFF);
             sheenPaint.setShader(new LinearGradient(0, pill.top, 0, pill.bottom,
-                    Color.argb(dark ? 0x1A : 0x59, 0xFF, 0xFF, 0xFF), Color.TRANSPARENT, Shader.TileMode.CLAMP));
+                    over(sheen, fill), fill, Shader.TileMode.CLAMP));
         }
         canvas.drawRoundRect(pill, radius, radius, sheenPaint);
+    }
+
+    /** {@code top} drawn over {@code bottom}, as one color. */
+    private static int over(int top, int bottom) {
+        float at = Color.alpha(top) / 255f, ab = Color.alpha(bottom) / 255f;
+        float a = at + ab * (1f - at);
+        if (a <= 0f) return Color.TRANSPARENT;
+        float kb = ab * (1f - at);
+        return Color.argb(Math.round(a * 255),
+                Math.round((Color.red(top) * at + Color.red(bottom) * kb) / a),
+                Math.round((Color.green(top) * at + Color.green(bottom) * kb) / a),
+                Math.round((Color.blue(top) * at + Color.blue(bottom) * kb) / a));
     }
 
     /** A soft shadow under the pill from three offset round rects, instead of an elevation shadow. */
@@ -485,7 +574,8 @@ final class LiquidGlassDrawable extends Drawable {
      * the base color, into {@link #lightNode}, and draws it. The node only refers to the views'
      * display lists, so recording is cheap. False if there's nothing to record.
      */
-    private boolean drawLightBackdrop(Canvas canvas, float blur) {
+    private boolean drawLightBackdrop(Canvas canvas, float blur, float radius,
+                                      LiquidGlassDrawable guest, float guestRadius) {
         if (!(host.getParent() instanceof ViewGroup)) return false;
         ViewGroup parent = (ViewGroup) host.getParent();
         int hostIndex = parent.indexOfChild(host);
@@ -496,6 +586,17 @@ final class LiquidGlassDrawable extends Drawable {
         float margin = (float) Math.ceil(blur);
         lightArea.set((float) Math.floor(hostX + pill.left - margin), (float) Math.floor(hostY + pill.top - margin),
                 (float) Math.ceil(hostX + pill.right + margin), (float) Math.ceil(hostY + pill.bottom + margin));
+        // With the song bar's glass: one recording for both, the area under the song bar
+        // recorded the way it would record it itself (see shareBackdrop).
+        int endIndex = hostIndex;
+        if (guest != null) {
+            guestArea.set((float) Math.floor(hostX + guestPill.left - margin), (float) Math.floor(hostY + guestPill.top - margin),
+                    (float) Math.ceil(hostX + guestPill.right + margin), (float) Math.ceil(hostY + guestPill.bottom + margin));
+            // Not past the top of this glass's pill: below that is this glass's part.
+            guestArea.bottom = Math.min(guestArea.bottom, hostY + pill.top);
+            lightArea.union(guestArea);
+            endIndex = parent.indexOfChild(guest.host);
+        }
         int w = Math.round(lightArea.width()), h = Math.round(lightArea.height());
         if (w <= 0 || h <= 0) return false;
 
@@ -505,32 +606,172 @@ final class LiquidGlassDrawable extends Drawable {
             lightBlur = blur;
             lightNode.setRenderEffect(RenderEffect.createChainEffect(
                     RenderEffect.createColorFilterEffect(new android.graphics.ColorMatrixColorFilter(FROSTED)),
-                    RenderEffect.createBlurEffect(blur, blur, Shader.TileMode.CLAMP)));
+                    RenderEffect.createBlurEffect(blur / LIGHT_DOWNSAMPLE, blur / LIGHT_DOWNSAMPLE,
+                            Shader.TileMode.CLAMP)));
         }
-        lightNode.setPosition(0, 0, w, h);
-        RecordingCanvas rc = lightNode.beginRecording(w, h);
+        int sw = (w + LIGHT_DOWNSAMPLE - 1) / LIGHT_DOWNSAMPLE, sh = (h + LIGHT_DOWNSAMPLE - 1) / LIGHT_DOWNSAMPLE;
+        // Recorded again only when what's behind may have changed (see refreshBackdrop) or the
+        // area it shows moved: otherwise the recorded node is drawn again as it is.
+        boolean reuse = !lightStale && lightNode.hasDisplayList() && lightDark == dark
+                && lightNode.getWidth() == sw && lightNode.getHeight() == sh
+                && lightRecordedArea.equals(lightArea) && lightShared == (guest != null);
+        lightNode.setPosition(0, 0, sw, sh);
+        if (reuse) {
+            drawLightNode(canvas, hostX, hostY, radius, guest != null, guestRadius);
+            return true;
+        }
+        RecordingCanvas rc = lightNode.beginRecording(sw, sh);
         try {
             // Under the content, which may have no background of its own: blurred text over
             // nothing would come out mostly clear, with the sharp text showing.
             rc.drawColor(dark ? Color.BLACK : Color.WHITE);
+            rc.scale(1f / LIGHT_DOWNSAMPLE, 1f / LIGHT_DOWNSAMPLE);
             rc.translate(-lightArea.left, -lightArea.top);
-            for (int i = 0; i < hostIndex; i++) {
+            for (int i = 0; i < endIndex; i++) {
                 View child = parent.getChildAt(i);
-                if (child.getVisibility() != View.VISIBLE || child.getAlpha() == 0f) continue;
+                if (child == host || child.getVisibility() != View.VISIBLE || child.getAlpha() == 0f) continue;
                 if (child instanceof EdgeBlurView || isExcluded(child)) continue;
+                if (guest != null && guest.isExcluded(child)) continue;
                 if (!intersects(child, lightArea.left, lightArea.top, w, h)) continue;
+                if (i > hostIndex) {
+                    // Above this glass's host (the player page, say): only the song bar looks
+                    // through it, so it's kept to the song bar's part of the recording.
+                    int save = rc.save();
+                    rc.clipRect(guestArea);
+                    Siblings.draw(rc, child);
+                    rc.restoreToCount(save);
+                    continue;
+                }
                 Siblings.draw(rc, child);
             }
         } finally {
             lightNode.endRecording();
         }
+        lightStale = false;
+        lightDark = dark;
+        lightShared = guest != null;
+        lightRecordedArea.set(lightArea);
 
-        int save = canvas.save();
-        canvas.translate(lightArea.left - hostX, lightArea.top - hostY);
-        canvas.drawRenderNode(lightNode);
-        canvas.restoreToCount(save);
+        drawLightNode(canvas, hostX, hostY, radius, guest != null, guestRadius);
         return true;
     }
+
+    /**
+     * Draws lightNode clipped to the pill. Directly, not through a layer to keep the blur (see
+     * Layers): the content is drawn into the recording too, so the renderer redoes the blur on
+     * every frame YouTube Music draws anyway, and a layer only added a pass.
+     */
+    private void drawLightNode(Canvas canvas, float hostX, float hostY, float radius,
+                               boolean withGuest, float guestRadius) {
+        if (lightClip == null) lightClip = new RenderNode("LiquidGlassLightClip");
+        // The clip node covers the pill, and the song bar's pill when it draws that one too: one
+        // outline shaped like both, so the blurred node is drawn from this one place only (drawn
+        // from two places, the renderer blurred it once for each).
+        clipBounds.set(pill);
+        if (withGuest) clipBounds.union(guestPill);
+        int pw = Math.round(clipBounds.width()), ph = Math.round(clipBounds.height());
+        lightClip.setPosition(0, 0, pw, ph);
+        if (withGuest) {
+            clipShape.reset();
+            clipShape.addRoundRect(pill.left - clipBounds.left, pill.top - clipBounds.top,
+                    pill.right - clipBounds.left, pill.bottom - clipBounds.top, radius, radius, android.graphics.Path.Direction.CW);
+            clipShape.addRoundRect(guestPill.left - clipBounds.left, guestPill.top - clipBounds.top,
+                    guestPill.right - clipBounds.left, guestPill.bottom - clipBounds.top, guestRadius, guestRadius,
+                    android.graphics.Path.Direction.CW);
+            lightOutline.setPath(clipShape);
+        } else {
+            lightOutline.setRoundRect(0, 0, pw, ph, radius);
+        }
+        lightClip.setOutline(lightOutline);
+        lightClip.setClipToOutline(true);
+        RecordingCanvas cc = lightClip.beginRecording(pw, ph);
+        try {
+            cc.translate(lightArea.left - hostX - clipBounds.left, lightArea.top - hostY - clipBounds.top);
+            // Recorded small (LIGHT_DOWNSAMPLE): scaled back up here, blurred already.
+            cc.scale(LIGHT_DOWNSAMPLE, LIGHT_DOWNSAMPLE);
+            cc.drawRenderNode(lightNode);
+        } finally {
+            lightClip.endRecording();
+        }
+        int save = canvas.save();
+        canvas.translate(clipBounds.left, clipBounds.top);
+        canvas.drawRenderNode(lightClip);
+        canvas.restoreToCount(save);
+    }
+
+    // region Shared with the song bar
+
+    /** Lightweight glass: the glass whose glass this one draws too (the song bar's), and the reverse. */
+    private LiquidGlassDrawable sharedWith, sharedFrom;
+    /** Whether the last draw drew the song bar's glass, and where (this host's coordinates). */
+    private boolean guestDrawn;
+    private final RectF guestDrawnPill = new RectF();
+    /** The song bar's pill in this host's coordinates, and its part of the recording in the parent's. */
+    private final RectF guestPill = new RectF();
+    private final RectF guestArea = new RectF();
+    /** Whether lightNode's last recording covered the song bar too. */
+    private boolean lightShared;
+    private final RectF clipBounds = new RectF();
+    private final android.graphics.Path clipShape = new android.graphics.Path();
+
+    /**
+     * Lightweight glass: {@code owner} (the tab bar's) also draws {@code guest} (the song bar's,
+     * above it in the same parent) whenever both are at rest: both shadows, one blurred backdrop
+     * clipped to both pills, both fills. While content moves that's one blur and one recording
+     * of the list per frame instead of two. While either fades or the bar slides, the song bar
+     * draws its own glass as before.
+     */
+    static void shareBackdrop(LiquidGlassDrawable owner, LiquidGlassDrawable guest) {
+        owner.sharedWith = guest;
+        guest.sharedFrom = owner;
+    }
+
+    /** Whether this (the owner) can draw {@code guest}'s glass now. */
+    private boolean canShare(LiquidGlassDrawable guest) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) return false;
+        View b = host, g = guest.host;
+        if (!(b.getParent() instanceof ViewGroup) || g.getParent() != b.getParent()) return false;
+        if (!b.isShown() || b.getAlpha() != 1f || b.getTranslationY() != 0f) return false;
+        if (g.getVisibility() != View.VISIBLE || g.getAlpha() != 1f || g.getWidth() == 0 || g.getHeight() == 0) return false;
+        ViewGroup parent = (ViewGroup) b.getParent();
+        if (parent.indexOfChild(g) <= parent.indexOfChild(b)) return false;
+        // Drawn after this glass's host, or this glass would cover its title and buttons.
+        if (g.getZ() < b.getZ()) return false;
+        NavbarStyle gs = guest.styleSource.get();
+        return gs.lightweight() && gs.blurDp == style.blurDp && guest.dark == dark && !guest.getPill().isEmpty();
+    }
+
+    private float guestOffsetX(LiquidGlassDrawable guest) {
+        return guest.host.getLeft() + guest.host.getTranslationX() - host.getLeft() - host.getTranslationX();
+    }
+
+    private float guestOffsetY(LiquidGlassDrawable guest) {
+        return guest.host.getTop() + guest.host.getTranslationY() - host.getTop() - host.getTranslationY();
+    }
+
+    /** {@code guest}'s pill in this host's coordinates. */
+    private void guestPillInHost(LiquidGlassDrawable guest, RectF out) {
+        out.set(guest.getPill());
+        out.offset(guestOffsetX(guest), guestOffsetY(guest));
+    }
+
+    /** Whether this (the owner) drew {@code guest}'s glass in its last draw, as it is now. */
+    private boolean drawsGuest(LiquidGlassDrawable guest) {
+        if (!guestDrawn || !canShare(guest)) return false;
+        guestPillInHost(guest, tmpPill);
+        return tmpPill.equals(guestDrawnPill);
+    }
+
+    private final RectF tmpPill = new RectF();
+
+    @Override
+    public void invalidateSelf() {
+        super.invalidateSelf();
+        // The song bar's glass is drawn by the tab bar's: that one draws again too.
+        if (sharedFrom != null && sharedFrom.guestDrawn) sharedFrom.invalidateSelf();
+    }
+
+    // endregion
 
     // endregion
 
@@ -615,6 +856,7 @@ final class LiquidGlassDrawable extends Drawable {
         updateEffects(w, h, pad, radius, strength, refract);
         RenderNode recorded = recordBackdrop(parent, pad(strength), blurRadiusPx / (float) DOWNSAMPLE);
         if (recorded == null) return false;
+        boolean rerecorded = backdropRerecorded;
         if (refracted == null) {
             refracted = new RenderNode("LiquidGlassRefraction");
             glass = new RenderNode("LiquidGlass");
@@ -634,15 +876,24 @@ final class LiquidGlassDrawable extends Drawable {
         // pill with a transparent band around it.
         if (glassEffect != null) {
             refracted.setPosition(0, 0, w, h);
-            RecordingCanvas gc = refracted.beginRecording(w, h);
-            try {
-                gc.translate(dx, dy);
-                gc.scale(DOWNSAMPLE, DOWNSAMPLE);
-                gc.drawRenderNode(recorded);
-            } finally {
-                refracted.endRecording();
+            // Recorded again only with a new backdrop recording, a new effect or another placement.
+            if (rerecorded || glassEffect != refractedEffect || !refracted.hasDisplayList()
+                    || w != refractedW || h != refractedH || dx != refractedDx || dy != refractedDy) {
+                refractedEffect = glassEffect;
+                refractedW = w;
+                refractedH = h;
+                refractedDx = dx;
+                refractedDy = dy;
+                RecordingCanvas gc = refracted.beginRecording(w, h);
+                try {
+                    gc.translate(dx, dy);
+                    gc.scale(DOWNSAMPLE, DOWNSAMPLE);
+                    gc.drawRenderNode(recorded);
+                } finally {
+                    refracted.endRecording();
+                }
+                refracted.setRenderEffect(glassEffect);
             }
-            refracted.setRenderEffect(glassEffect);
             // The shader already cuts the glass to the pill (anti-aliased), so it's drawn as is:
             // no clipping node, one render pass less.
             int save = canvas.save();
@@ -654,17 +905,23 @@ final class LiquidGlassDrawable extends Drawable {
 
         // Wrap in a node clipped to the pill outline: anti-aliased, unlike clipPath.
         clipped.setPosition(0, 0, Math.round(pill.width()), Math.round(pill.height()));
-        Outline outline = clipOutline;
-        outline.setRoundRect(0, 0, Math.round(pill.width()), Math.round(pill.height()), radius);
-        clipped.setOutline(outline);
-        clipped.setClipToOutline(true);
-        RecordingCanvas cc = clipped.beginRecording();
-        try {
-            cc.translate(dx - pad, dy - pad);
-            cc.scale(DOWNSAMPLE, DOWNSAMPLE);
-            cc.drawRenderNode(recorded);
-        } finally {
-            clipped.endRecording();
+        if (rerecorded || !clipped.hasDisplayList() || radius != clippedRadius
+                || dx - pad != clippedDx || dy - pad != clippedDy) {
+            clippedRadius = radius;
+            clippedDx = dx - pad;
+            clippedDy = dy - pad;
+            Outline outline = clipOutline;
+            outline.setRoundRect(0, 0, Math.round(pill.width()), Math.round(pill.height()), radius);
+            clipped.setOutline(outline);
+            clipped.setClipToOutline(true);
+            RecordingCanvas cc = clipped.beginRecording();
+            try {
+                cc.translate(dx - pad, dy - pad);
+                cc.scale(DOWNSAMPLE, DOWNSAMPLE);
+                cc.drawRenderNode(recorded);
+            } finally {
+                clipped.endRecording();
+            }
         }
 
         int save = canvas.save();
@@ -678,6 +935,14 @@ final class LiquidGlassDrawable extends Drawable {
     private final RectF area = new RectF();
     private RenderNode backdrop;
     private float backdropBlur = -1f;
+    /** What the backdrop was recorded for, and whether the last recordBackdrop call recorded it. */
+    private final RectF backdropArea = new RectF();
+    private boolean backdropDark;
+    private boolean backdropRerecorded;
+    /** What refracted and clipped were recorded for. */
+    private RenderEffect refractedEffect;
+    private int refractedW = -1, refractedH = -1;
+    private float refractedDx, refractedDy, clippedRadius = -1f, clippedDx, clippedDy;
 
     /**
      * Records the siblings below the glass, around the pill with a margin of {@code margin},
@@ -698,6 +963,15 @@ final class LiquidGlassDrawable extends Drawable {
         int w = Math.round(area.width()), h = Math.round(area.height());
         int sw = (w + down - 1) / down, sh = (h + down - 1) / down;
 
+        // Reused as recorded unless something behind the glass may have changed (refreshBackdrop)
+        // or the area it covers did.
+        backdropRerecorded = false;
+        if (!backdropStale && backdrop != null && backdrop.hasDisplayList() && backdropDark == dark
+                && blurRadius == backdropBlur && backdropArea.equals(area)
+                && backdrop.getWidth() == sw && backdrop.getHeight() == sh) {
+            return backdrop;
+        }
+        backdropRerecorded = true;
         if (backdrop == null) {
             backdrop = new RenderNode("LiquidGlassBackdrop");
             // Its own layer, so the base color can be filled in behind what's recorded.
@@ -729,6 +1003,9 @@ final class LiquidGlassDrawable extends Drawable {
         } finally {
             backdrop.endRecording();
         }
+        backdropStale = false;
+        backdropDark = dark;
+        backdropArea.set(area);
         if (blurRadius != backdropBlur) {
             // Set only when it changes: a new effect is a change the GPU redraws the layer for.
             backdropBlur = blurRadius;

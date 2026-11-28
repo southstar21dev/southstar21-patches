@@ -41,6 +41,9 @@ final class LiquidGlassController implements ViewTreeObserver.OnPreDrawListener 
     /** Progressive blur behind the pill. Null if it can't be added. */
     private EdgeBlurView bottomBlur;
     private final int[] location = new int[2];
+    /** The bar's position in the window now and when the glass last refreshed. */
+    private final int[] barPosition = new int[2];
+    private final int[] lastBarPosition = {Integer.MIN_VALUE, Integer.MIN_VALUE};
     /** How far the bar's container stops short of the screen bottom for the navigation bar. */
     private int bottomInset;
 
@@ -186,18 +189,23 @@ final class LiquidGlassController implements ViewTreeObserver.OnPreDrawListener 
             ViewGroup stripBefore = tabs.strip();
             boolean stripWasRequested = stripBefore != null && stripBefore.isLayoutRequested();
             stripPadded = false;
-            // Redraw the glass only when what's behind it can have changed: during and just after
-            // a touch (scrolls, flings), after a layout pass, and once a second for anything else
+            // Redraw the glass only when what's behind it can have changed: while a finger is
+            // down or content scrolls (flings included), after a layout pass, when the bar itself
+            // moved (the player sheet sliding it down), and once a second for anything else
             // (images loading). Redrawing every frame schedules another frame each time, so the
             // app never stopped drawing. (YouTube Music redraws on its own while the mini
             // player's title scrolls; the glass needn't follow every one of those frames.)
             long now = android.os.SystemClock.uptimeMillis();
-            boolean refresh = layoutChanged || Interaction.recent(now) || now - lastRefresh > 1000;
+            bar.getLocationInWindow(barPosition);
+            boolean moved = barPosition[0] != lastBarPosition[0] || barPosition[1] != lastBarPosition[1];
+            boolean refresh = layoutChanged || Interaction.moving(now) || moved || now - lastRefresh > 1000;
             enforce(refresh);
             if (refresh) {
                 layoutChanged = false;
                 lastRefresh = now;
-                if (bar.getVisibility() == View.VISIBLE) glass.invalidateSelf();
+                lastBarPosition[0] = barPosition[0];
+                lastBarPosition[1] = barPosition[1];
+                if (bar.getVisibility() == View.VISIBLE) glass.refreshBackdrop();
             }
             tabs.update();
             enforceStripPadding();
