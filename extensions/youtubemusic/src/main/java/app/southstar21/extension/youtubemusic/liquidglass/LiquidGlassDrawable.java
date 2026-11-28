@@ -162,9 +162,14 @@ final class LiquidGlassDrawable extends Drawable {
     /** Holds the finished glass in a layer (see Layers). */
     private RenderNode glass;
     private RenderNode clipped;
+    private final Outline clipOutline = new Outline();
     private RuntimeShader shader;
     private RenderEffect glassEffect;
-    private String effectKey;
+    /** The inputs the glass effect was last built for (see updateEffects). */
+    private boolean effectValid;
+    private int effW, effH, effPad, effTint, effRadius, effStrength, effLiquid;
+    private boolean effDark, effRefract, effSouthstar21;
+    private int effStyleVersion;
 
 
     LiquidGlassDrawable(View host, float density, NavbarStyle.Source styleSource) {
@@ -211,7 +216,7 @@ final class LiquidGlassDrawable extends Drawable {
     void setSouthstar21(boolean on) {
         if (southstar21 == on) return;
         southstar21 = on;
-        effectKey = null;
+        effectValid = false;
         invalidateSelf();
     }
 
@@ -225,7 +230,7 @@ final class LiquidGlassDrawable extends Drawable {
     void setDark(boolean dark) {
         if (this.dark == dark) return;
         this.dark = dark;
-        effectKey = null;
+        effectValid = false;
         invalidateSelf();
     }
 
@@ -534,6 +539,10 @@ final class LiquidGlassDrawable extends Drawable {
      * lift over the whole pill plus a soft spot around the selection, added on top of the glass
      * and under the tab icons.
      */
+    private android.graphics.RadialGradient glowShader;
+    private float glowShaderX, glowShaderY, glowShaderSpot;
+    private int glowShaderColor;
+
     private void drawGlow(Canvas canvas, float radius) {
         if (glow <= 0.001f) return;
         float g = Math.min(glow, 1.5f);
@@ -544,9 +553,18 @@ final class LiquidGlassDrawable extends Drawable {
         float spot = pill.height() * 1.5f;
         int c = Color.argb(Math.round(255 * Math.min(1f, 0.15f * g)), 0xFF, 0xFF, 0xFF);
         float x = Math.max(pill.left, Math.min(pill.right, glowX));
-        glowPaint.setShader(new android.graphics.RadialGradient(x, pill.centerY(), spot,
-                new int[]{c, c, Color.argb(0, 0xFF, 0xFF, 0xFF)}, new float[]{0f, 0.5f, 1f},
-                Shader.TileMode.CLAMP));
+        float cy = pill.centerY();
+        if (glowShader == null || x != glowShaderX || cy != glowShaderY || spot != glowShaderSpot
+                || c != glowShaderColor) {
+            glowShaderX = x;
+            glowShaderY = cy;
+            glowShaderSpot = spot;
+            glowShaderColor = c;
+            glowShader = new android.graphics.RadialGradient(x, cy, spot,
+                    new int[]{c, c, Color.argb(0, 0xFF, 0xFF, 0xFF)}, new float[]{0f, 0.5f, 1f},
+                    Shader.TileMode.CLAMP);
+        }
+        glowPaint.setShader(glowShader);
         canvas.drawRoundRect(pill, radius, radius, glowPaint);
     }
 
@@ -636,7 +654,7 @@ final class LiquidGlassDrawable extends Drawable {
 
         // Wrap in a node clipped to the pill outline: anti-aliased, unlike clipPath.
         clipped.setPosition(0, 0, Math.round(pill.width()), Math.round(pill.height()));
-        Outline outline = new Outline();
+        Outline outline = clipOutline;
         outline.setRoundRect(0, 0, Math.round(pill.width()), Math.round(pill.height()), radius);
         clipped.setOutline(outline);
         clipped.setClipToOutline(true);
@@ -727,11 +745,28 @@ final class LiquidGlassDrawable extends Drawable {
     }
 
     private void updateEffects(int w, int h, int pad, float radius, float strength, boolean refract) {
-        String key = w + "x" + h + ":" + pad + ":" + dark + ":" + refract + ":" + Math.round(tint * 100)
-                + ":" + southstar21 + ":" + Math.round(radius) + ":" + Math.round(strength) + ":" + style.version
-                + ":" + Math.round(liquid * 20);
-        if (key.equals(effectKey)) return;
-        effectKey = key;
+        int roundedTint = Math.round(tint * 100);
+        int roundedRadius = Math.round(radius);
+        int roundedStrength = Math.round(strength);
+        int roundedLiquid = Math.round(liquid * 20);
+        if (effectValid && effW == w && effH == h && effPad == pad && effDark == dark && effRefract == refract
+                && effTint == roundedTint && effSouthstar21 == southstar21 && effRadius == roundedRadius
+                && effStrength == roundedStrength && effStyleVersion == style.version
+                && effLiquid == roundedLiquid) {
+            return;
+        }
+        effectValid = true;
+        effW = w;
+        effH = h;
+        effPad = pad;
+        effDark = dark;
+        effRefract = refract;
+        effTint = roundedTint;
+        effSouthstar21 = southstar21;
+        effRadius = roundedRadius;
+        effStrength = roundedStrength;
+        effStyleVersion = style.version;
+        effLiquid = roundedLiquid;
 
         if (!refract) {
             glassEffect = null;
@@ -773,23 +808,37 @@ final class LiquidGlassDrawable extends Drawable {
      * fine light line, brighter along the bottom than the top, and a soft glow rising inside
      * from the bottom edge.
      */
+    private float rimShaderTop = Float.NaN, rimShaderBottom, rimShaderGlow, rimShaderStrength;
+
     private void drawRim(Canvas canvas, float radius) {
         if (dark) {
             float glow = 5f * density;
-            edgeGlowPaint.setShader(new LinearGradient(0, pill.bottom - glow, 0, pill.bottom,
-                    Color.argb(0, 0xFF, 0xFF, 0xFF), Color.argb(rimAlpha(0x1C), 0xFF, 0xFF, 0xFF),
-                    Shader.TileMode.CLAMP));
+            boolean rebuild = rimShaderTop != pill.top || rimShaderBottom != pill.bottom
+                    || rimShaderGlow != glow || rimShaderStrength != style.rim;
+            if (rebuild) {
+                rimShaderTop = pill.top;
+                rimShaderBottom = pill.bottom;
+                rimShaderGlow = glow;
+                rimShaderStrength = style.rim;
+                edgeGlowPaint.setShader(new LinearGradient(0, pill.bottom - glow, 0, pill.bottom,
+                        Color.argb(0, 0xFF, 0xFF, 0xFF), Color.argb(rimAlpha(0x1C), 0xFF, 0xFF, 0xFF),
+                        Shader.TileMode.CLAMP));
+            }
             canvas.drawRoundRect(pill, radius, radius, edgeGlowPaint);
             rimPaint.setStrokeWidth(Math.max(1f, 0.6f * density));
             rimPaint.setColor(Color.WHITE);
-            rimPaint.setShader(new LinearGradient(0, pill.top, 0, pill.bottom,
-                    new int[]{Color.argb(rimAlpha(0x48), 0xFF, 0xFF, 0xFF),
-                            Color.argb(rimAlpha(0x0C), 0xFF, 0xFF, 0xFF),
-                            Color.argb(rimAlpha(0x66), 0xFF, 0xFF, 0xFF)},
-                    new float[]{0f, 0.5f, 1f}, Shader.TileMode.CLAMP));
+            if (rebuild) {
+                rimPaint.setShader(new LinearGradient(0, pill.top, 0, pill.bottom,
+                        new int[]{Color.argb(rimAlpha(0x48), 0xFF, 0xFF, 0xFF),
+                                Color.argb(rimAlpha(0x0C), 0xFF, 0xFF, 0xFF),
+                                Color.argb(rimAlpha(0x66), 0xFF, 0xFF, 0xFF)},
+                        new float[]{0f, 0.5f, 1f}, Shader.TileMode.CLAMP));
+            }
         } else {
             rimPaint.setStrokeWidth(Math.max(1f, 0.8f * density));
             rimPaint.setShader(null);
+            // The dark shaders were dropped, so the next dark draw builds them again.
+            rimShaderTop = Float.NaN;
             rimPaint.setColor(Color.argb(rimAlpha(0xF2), 0xFF, 0xFF, 0xFF));
         }
         float half = rimPaint.getStrokeWidth() / 2f;
