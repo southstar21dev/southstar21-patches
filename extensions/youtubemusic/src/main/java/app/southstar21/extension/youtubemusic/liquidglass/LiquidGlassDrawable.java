@@ -514,10 +514,7 @@ final class LiquidGlassDrawable extends Drawable {
                 if (child.getVisibility() != View.VISIBLE || child.getAlpha() == 0f) continue;
                 if (child instanceof EdgeBlurView || isExcluded(child)) continue;
                 if (!intersects(child, lightArea.left, lightArea.top, w, h)) continue;
-                int save = rc.save();
-                rc.translate(child.getLeft() + child.getTranslationX(), child.getTop() + child.getTranslationY());
-                child.draw(rc);
-                rc.restoreToCount(save);
+                Siblings.draw(rc, child);
             }
         } finally {
             lightNode.endRecording();
@@ -699,10 +696,7 @@ final class LiquidGlassDrawable extends Drawable {
                 // The edge blur sits between content and bar; the glass blurs on its own.
                 if (child instanceof EdgeBlurView || isExcluded(child)) continue;
                 if (!intersects(child, area.left, area.top, w, h)) continue;
-                int save = rc.save();
-                rc.translate(child.getLeft() + child.getTranslationX(), child.getTop() + child.getTranslationY());
-                child.draw(rc);
-                rc.restoreToCount(save);
+                Siblings.draw(rc, child);
             }
             // Videos playing under the bar are holes in the recording: fill them with copies
             // where those work, then the base color (for the window's background) everywhere

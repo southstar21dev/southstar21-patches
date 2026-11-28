@@ -1115,10 +1115,7 @@ final class LiquidGlassLens extends View {
             for (int i = 0; i <= barIndex; i++) {
                 View child = parent.getChildAt(i);
                 if (child.getVisibility() != VISIBLE || child.getAlpha() == 0f || glass.isExcluded(child)) continue;
-                int save = rc.save();
-                rc.translate(child.getLeft() + child.getTranslationX(), child.getTop() + child.getTranslationY());
-                child.draw(rc);
-                rc.restoreToCount(save);
+                Siblings.draw(rc, child);
             }
             // Videos under the bar are holes in the recording: fill them, then the base.
             SurfaceSnapshots snapshots = glass.snapshots();

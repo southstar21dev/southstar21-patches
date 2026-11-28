@@ -189,10 +189,7 @@ final class EdgeBlurView extends View {
                 View child = parent.getChildAt(i);
                 if (child.getVisibility() != VISIBLE || child.getAlpha() == 0f) continue;
                 if (child instanceof EdgeBlurView) continue;
-                int save = rc.save();
-                rc.translate(child.getLeft() + child.getTranslationX(), child.getTop() + child.getTranslationY());
-                child.draw(rc);
-                rc.restoreToCount(save);
+                Siblings.draw(rc, child);
             }
             // Videos are holes in the recording: fill them with copies where those work, then
             // the base color (for the window's background) everywhere but uncopied videos.
