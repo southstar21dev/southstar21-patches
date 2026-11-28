@@ -63,10 +63,38 @@ final class TouchRouter implements InvocationHandler {
     static void install(Window window, LiquidGlassLens lens) {
         Window.Callback original = window.getCallback();
         if (original == null || Proxy.isProxyClass(original.getClass())) return;
+        watchScrolls(window);
         window.setCallback((Window.Callback) Proxy.newProxyInstance(
                 Window.Callback.class.getClassLoader(),
                 new Class<?>[]{Window.Callback.class},
                 new TouchRouter(original, lens)));
+    }
+
+    /**
+     * Notes every scroll in the window (see Interaction), so the glass refreshes while content
+     * moves and not for a fixed time after a touch. Kept across the view tree being attached again.
+     */
+    private static void watchScrolls(Window window) {
+        try {
+            final android.view.View decor = window.getDecorView();
+            final android.view.ViewTreeObserver.OnScrollChangedListener listener = Interaction::scrolled;
+            decor.getViewTreeObserver().addOnScrollChangedListener(listener);
+            decor.addOnAttachStateChangeListener(new android.view.View.OnAttachStateChangeListener() {
+                @Override
+                public void onViewAttachedToWindow(android.view.View v) {
+                    // Removed first so it is never added twice.
+                    v.getViewTreeObserver().removeOnScrollChangedListener(listener);
+                    v.getViewTreeObserver().addOnScrollChangedListener(listener);
+                }
+
+                @Override
+                public void onViewDetachedFromWindow(android.view.View v) {
+                    v.getViewTreeObserver().removeOnScrollChangedListener(listener);
+                }
+            });
+        } catch (Throwable t) {
+            android.util.Log.e(LiquidGlassNavBarPatch.TAG, "Not watching scrolls", t);
+        }
     }
 
     @Override
@@ -83,6 +111,12 @@ final class TouchRouter implements InvocationHandler {
 
     boolean dispatchTouchEvent(MotionEvent event) {
         Interaction.touched();
+        int touchAction = event.getActionMasked();
+        if (touchAction == MotionEvent.ACTION_DOWN || touchAction == MotionEvent.ACTION_POINTER_DOWN) {
+            Interaction.fingerDown(true);
+        } else if (touchAction == MotionEvent.ACTION_UP || touchAction == MotionEvent.ACTION_CANCEL) {
+            Interaction.fingerDown(false);
+        }
         java.lang.ref.WeakReference<Watcher> ref = watcher;
         Watcher w = ref == null ? null : ref.get();
         if (w != null && window != null) {
