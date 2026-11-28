@@ -36,6 +36,14 @@ final class JellyGlass extends Drawable {
     }
 
     private static final int MAX = 4;
+    /** The shader's uniform names per drop, built once instead of on every draw. */
+    private static final String[] S_NAMES = new String[MAX], T_NAMES = new String[MAX];
+    static {
+        for (int i = 0; i < MAX; i++) {
+            S_NAMES[i] = "s" + i;
+            T_NAMES[i] = "t" + i;
+        }
+    }
 
     private static final String SHADER =
             "uniform shader content;\n" +
@@ -609,12 +617,12 @@ final class JellyGlass extends Drawable {
             uniform[1] = d == null ? 0f : d.cy + (self ? 0f : d.ty);
             uniform[2] = d == null ? 0f : d.drawnW / 2f;
             uniform[3] = d == null ? 0f : Math.max(0f, Math.min(1f, d.press.value));
-            shader.setFloatUniform("s" + i, uniform);
+            shader.setFloatUniform(S_NAMES[i], uniform);
             uniform[0] = d == null || self ? 1f : d.sx;
             uniform[1] = d == null || self ? 1f : d.sy;
             uniform[2] = d == null ? 0f : d.drawnH / 2f;
             uniform[3] = d == null ? 0f : d.fill;
-            shader.setFloatUniform("t" + i, uniform);
+            shader.setFloatUniform(T_NAMES[i], uniform);
         }
         shader.setFloatUniform("pad", pad, pad);
         // Drops a little apart only bulge towards each other; pressed, they reach much further.

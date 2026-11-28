@@ -41,6 +41,9 @@ final class LiquidGlassController implements ViewTreeObserver.OnPreDrawListener 
     /** Progressive blur behind the pill. Null if it can't be added. */
     private EdgeBlurView bottomBlur;
     private final int[] location = new int[2];
+    /** The bar's position in the window now and when the glass last refreshed. */
+    private final int[] barPosition = new int[2];
+    private final int[] lastBarPosition = {Integer.MIN_VALUE, Integer.MIN_VALUE};
     /** How far the bar's container stops short of the screen bottom for the navigation bar. */
     private int bottomInset;
 
@@ -177,22 +180,32 @@ final class LiquidGlassController implements ViewTreeObserver.OnPreDrawListener 
 
     /** Frames skipped in a row because the bar had to be laid out again (see onPreDraw). */
     private int skippedFrames;
+    /** This pre-draw put the strip's padding back (YouTube Music had replaced it). */
+    private boolean stripPadded;
     @Override
     public boolean onPreDraw() {
         try {
             boolean wasRequested = bar.isLayoutRequested();
-            // Redraw the glass only when what's behind it can have changed: during and just after
-            // a touch (scrolls, flings), after a layout pass, and once a second for anything else
+            ViewGroup stripBefore = tabs.strip();
+            boolean stripWasRequested = stripBefore != null && stripBefore.isLayoutRequested();
+            stripPadded = false;
+            // Redraw the glass only when what's behind it can have changed: while a finger is
+            // down or content scrolls (flings included), after a layout pass, when the bar itself
+            // moved (the player sheet sliding it down), and once a second for anything else
             // (images loading). Redrawing every frame schedules another frame each time, so the
             // app never stopped drawing. (YouTube Music redraws on its own while the mini
             // player's title scrolls; the glass needn't follow every one of those frames.)
             long now = android.os.SystemClock.uptimeMillis();
-            boolean refresh = layoutChanged || Interaction.recent(now) || now - lastRefresh > 1000;
+            bar.getLocationInWindow(barPosition);
+            boolean moved = barPosition[0] != lastBarPosition[0] || barPosition[1] != lastBarPosition[1];
+            boolean refresh = layoutChanged || Interaction.moving(now) || moved || now - lastRefresh > 1000;
             enforce(refresh);
             if (refresh) {
                 layoutChanged = false;
                 lastRefresh = now;
-                if (bar.getVisibility() == View.VISIBLE) glass.invalidateSelf();
+                lastBarPosition[0] = barPosition[0];
+                lastBarPosition[1] = barPosition[1];
+                if (bar.getVisibility() == View.VISIBLE) glass.refreshBackdrop();
             }
             tabs.update();
             enforceStripPadding();
@@ -201,9 +214,14 @@ final class LiquidGlassController implements ViewTreeObserver.OnPreDrawListener 
             // Putting ours back asks for a new layout, but this frame would still be drawn with
             // YouTube Music's: a flash of a full width, squashed bar. Skip it and draw after the
             // layout instead (a few frames at most, so a fight can never freeze the app).
+            // Only for a layout this pre-draw asked for, and only while the bar shows: YouTube Music
+            // hides the bar while the full player is open, a hidden view is never laid out, and a
+            // request left in it skipped three frames of every four until the player closed.
             ViewGroup strip = tabs.strip();
-            boolean relayout = (!wasRequested && bar.isLayoutRequested())
-                    || (strip != null && strip.isLayoutRequested());
+            boolean stripRequested = strip != null && strip.isLayoutRequested()
+                    && (stripPadded || !(strip == stripBefore && stripWasRequested));
+            boolean relayout = bar.isShown()
+                    && ((!wasRequested && bar.isLayoutRequested()) || stripRequested);
             if (relayout && !dockMoved && skippedFrames < 3) {
                 skippedFrames++;
                 return false;
@@ -451,6 +469,7 @@ final class LiquidGlassController implements ViewTreeObserver.OnPreDrawListener 
         if (strip.getPaddingLeft() != stripLeft || strip.getPaddingTop() != stripTop
                 || strip.getPaddingRight() != stripRight || strip.getPaddingBottom() != stripBottom) {
             strip.setPadding(stripLeft, stripTop, stripRight, stripBottom);
+            stripPadded = true;
         }
     }
 

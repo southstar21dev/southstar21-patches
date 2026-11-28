@@ -99,12 +99,16 @@ final class MiniPlayerGlass implements ViewTreeObserver.OnPreDrawListener {
     private final Background background = new Background();
     /** The glass bar above the tabs: title and artist, then previous, play/pause and next. */
     private final android.widget.LinearLayout chip;
+    /** The glass tab bar, when the chip sits beside it (its elevation sets the drawing order). */
+    private View tabBar;
     private TextView chipText;
     private android.widget.ImageButton playButton;
     private final Glyph playGlyph = new Glyph(Glyph.PLAY);
     private View miniPlayer;
     /** When the glass was last redrawn for what's behind it (uptime ms). */
     private long lastRefresh;
+    /** Page in the window, mini player in the page, chip: where they were when the glass last refreshed. */
+    private final int[] lastPosition = new int[6];
     private boolean layoutChanged = true;
     private final ViewTreeObserver.OnGlobalLayoutListener layoutListener = () -> {
         layoutChanged = true;
@@ -175,8 +179,16 @@ final class MiniPlayerGlass implements ViewTreeObserver.OnPreDrawListener {
             // never shows in them anyway: it sits above the tab bar's glass.) Its own glass
             // looks past the tab bar and the lens.
             barParent.addView(chip, lp);
+            tabBar = bar;
+            // No shadow of its own: the elevation (see placeChip) only orders the drawing.
+            chip.setOutlineProvider(null);
             chipGlass.exclude(bar);
             chipGlass.exclude(lens);
+            // Lightweight glass: the tab bar's glass draws this one too while both rest, from one
+            // blurred backdrop (see LiquidGlassDrawable.shareBackdrop).
+            if (bar.getBackground() instanceof LiquidGlassDrawable) {
+                LiquidGlassDrawable.shareBackdrop((LiquidGlassDrawable) bar.getBackground(), chipGlass);
+            }
         } else if (page.getParent() instanceof ViewGroup) {
             ViewGroup parent = (ViewGroup) page.getParent();
             parent.addView(chip, parent.indexOfChild(page) + 1, lp);
@@ -480,15 +492,30 @@ final class MiniPlayerGlass implements ViewTreeObserver.OnPreDrawListener {
                 hideChip();
             }
 
-            // What's behind can only have moved during or just after a touch, or with a layout
-            // pass; otherwise once a second (which also moves the progress ring on).
+            // What's behind can only have moved while a finger is down or content scrolls, with a
+            // layout pass, or when the glass itself moved (the player sheet being dragged, the
+            // docking slide); otherwise once a second (which also moves the progress ring on).
             // (Every frame kept the app drawing nonstop.)
             long now = SystemClock.uptimeMillis();
-            if (layoutChanged || Interaction.recent(now) || now - lastRefresh > 1000) {
+            page.getLocationInWindow(location);
+            boolean chipShown = chip.getVisibility() == View.VISIBLE;
+            int chipX = chipShown ? Math.round(chip.getLeft() + chip.getTranslationX()) : 0;
+            int chipY = chipShown ? Math.round(chip.getTop() + chip.getTranslationY()) : 0;
+            boolean moved = location[0] != lastPosition[0] || location[1] != lastPosition[1]
+                    || l != lastPosition[2] || t != lastPosition[3]
+                    || chipX != lastPosition[4] || chipY != lastPosition[5];
+            if (layoutChanged || Interaction.moving(now) || moved || now - lastRefresh > 1000) {
                 layoutChanged = false;
                 lastRefresh = now;
-                background.invalidateSelf();
-                if (chip.getVisibility() == View.VISIBLE) chipGlass.invalidateSelf();
+                lastPosition[0] = location[0];
+                lastPosition[1] = location[1];
+                lastPosition[2] = l;
+                lastPosition[3] = t;
+                lastPosition[4] = chipX;
+                lastPosition[5] = chipY;
+                // The glass is drawn by the page's background, which it invalidates through its callback.
+                glass.refreshBackdrop();
+                if (chipShown) chipGlass.refreshBackdrop();
             }
         } catch (Throwable t) {
             page.getViewTreeObserver().removeOnPreDrawListener(this);
@@ -729,7 +756,18 @@ final class MiniPlayerGlass implements ViewTreeObserver.OnPreDrawListener {
             return;
         }
         if (chip.getVisibility() != View.VISIBLE) chip.setVisibility(View.VISIBLE);
-        if (chip.getAlpha() != shown) chip.setAlpha(shown);
+        // Drawn after the tab bar and its lens, which have an elevation: the tab bar's glass draws
+        // the chip's glass too (see LiquidGlassDrawable.shareBackdrop), under the chip's title and
+        // buttons, not over them.
+        if (tabBar != null) {
+            float z = tabBar.getElevation() + 0.2f;
+            if (chip.getElevation() != z) chip.setElevation(z);
+        }
+        if (chip.getAlpha() != shown) {
+            chip.setAlpha(shown);
+            // Faded, the chip draws its own glass again (the tab bar's only draws it at rest).
+            chipGlass.invalidateSelf();
+        }
         boolean playing = isPlaying();
         playGlyph.setKind(playing ? Glyph.PAUSE : Glyph.PLAY);
         playButton.setContentDescription(playing ? "Pause" : "Play");
@@ -1055,6 +1093,12 @@ final class MiniPlayerGlass implements ViewTreeObserver.OnPreDrawListener {
          * whenever the backdrop is drawn (the page and each glass row show it).
          */
         private final android.graphics.RenderNode[] blurred = new android.graphics.RenderNode[2];
+        /**
+         * The same covers as finished bitmaps (where {@link BlurredCover} can make them): drawn
+         * wherever the backdrop shows, which a blur node would render again each time.
+         */
+        private final android.graphics.Bitmap[] bitmaps = new android.graphics.Bitmap[2];
+        private final Paint bitmapPaint = new Paint(Paint.FILTER_BITMAP_FLAG);
         private int current;
         private long fadeStart = -FADE_MS;
         private static final long FADE_MS = 450;
@@ -1068,7 +1112,8 @@ final class MiniPlayerGlass implements ViewTreeObserver.OnPreDrawListener {
         }
 
         boolean hasBackdrop() {
-            return backdrops[current] != null && backdrops[current].hasDisplayList();
+            return bitmaps[current] != null
+                    || (backdrops[current] != null && backdrops[current].hasDisplayList());
         }
 
         /** Whether the new backdrop is still fading in. */
@@ -1104,7 +1149,7 @@ final class MiniPlayerGlass implements ViewTreeObserver.OnPreDrawListener {
                     // full one): replaces the one fading in, the fade still starting from the old song.
                     record(current, a);
                 } else {
-                    boolean had = backdrops[current].hasDisplayList();
+                    boolean had = hasBackdrop();
                     current ^= 1;
                     record(current, a);
                     fadeStart = had ? SystemClock.uptimeMillis() : -FADE_MS;
@@ -1137,6 +1182,13 @@ final class MiniPlayerGlass implements ViewTreeObserver.OnPreDrawListener {
             } finally {
                 cover.endRecording();
             }
+            // Rendered once into a bitmap where that works; the node is only the fallback.
+            bitmaps[index] = BlurredCover.render(cover, w, h);
+            if (bitmaps[index] != null) {
+                cover.discardDisplayList();
+                backdrops[index].discardDisplayList();
+                return;
+            }
             android.graphics.RenderNode backdrop = backdrops[index];
             backdrop.setPosition(0, 0, w, h);
             android.graphics.RecordingCanvas bc = backdrop.beginRecording(w, h);
@@ -1167,18 +1219,32 @@ final class MiniPlayerGlass implements ViewTreeObserver.OnPreDrawListener {
 
         @android.annotation.SuppressLint("NewApi")
         private void paintBackdrop(Canvas canvas) {
-            android.graphics.RenderNode now = backdrops[current], before = backdrops[current ^ 1];
-            if (now == null || backdropAlpha <= 0f || !now.hasDisplayList()) return;
+            int now = current, before = current ^ 1;
+            if (backdropAlpha <= 0f || !drawable(now)) return;
             float t = Math.min(1f, (SystemClock.uptimeMillis() - fadeStart) / (float) FADE_MS);
             Rect b = getBounds();
-            if (t < 1f && before.hasDisplayList()) {
-                before.setAlpha(backdropAlpha);
-                drawScaled(canvas, before, b);
-                now.setAlpha(backdropAlpha * t);
+            if (t < 1f && drawable(before)) {
+                drawSlot(canvas, before, backdropAlpha, b);
+                drawSlot(canvas, now, backdropAlpha * t, b);
             } else {
-                now.setAlpha(backdropAlpha);
+                drawSlot(canvas, now, backdropAlpha, b);
             }
-            drawScaled(canvas, now, b);
+        }
+
+        private boolean drawable(int index) {
+            return bitmaps[index] != null || (backdrops[index] != null && backdrops[index].hasDisplayList());
+        }
+
+        @android.annotation.SuppressLint("NewApi")
+        private void drawSlot(Canvas canvas, int index, float alpha, Rect b) {
+            android.graphics.Bitmap bitmap = bitmaps[index];
+            if (bitmap != null) {
+                bitmapPaint.setAlpha(Math.round(alpha * 255));
+                canvas.drawBitmap(bitmap, null, b, bitmapPaint);
+                return;
+            }
+            backdrops[index].setAlpha(alpha);
+            drawScaled(canvas, backdrops[index], b);
         }
 
         @android.annotation.SuppressLint("NewApi")

@@ -1,3 +1,10 @@
+/*
+ * Portions of this file are adapted from Kyant0/AndroidLiquidGlass
+ * (https://github.com/Kyant0/AndroidLiquidGlass), Copyright 2025 Kyant, licensed under the
+ * Apache License, Version 2.0 (see LICENSES/AndroidLiquidGlass-Apache-2.0.txt): the lens shader
+ * (Lens.kt) and the drop's movement (LiquidBottomTabs.kt). Changed for this project: ported from
+ * Kotlin and Compose to Java, Android Views and AGSL, and adjusted as noted in the comments below.
+ */
 package app.southstar21.extension.youtubemusic.liquidglass;
 
 import android.annotation.SuppressLint;
@@ -878,13 +885,29 @@ final class LiquidGlassLens extends View {
         }
 
         if (p > 0.02f) {
-            rim.setShader(new LinearGradient(lens.left, lens.top, lens.left + lens.width() * 0.4f, lens.bottom,
-                    new int[]{Color.argb(Math.round(0xE0 * p), 0xFF, 0xFF, 0xFF),
-                            Color.argb(Math.round(0x10 * p), 0xFF, 0xFF, 0xFF),
-                            Color.argb(Math.round(0x50 * p), 0xFF, 0xFF, 0xFF)},
-                    new float[]{0f, 0.55f, 1f}, Shader.TileMode.CLAMP));
+            updateLensRim(p);
             canvas.drawRoundRect(lens, r, r, rim);
         }
+    }
+
+    private float rimLeft = Float.NaN, rimTop, rimWidth, rimBottom, rimFade;
+
+    /** Points the rim paint at the lens rim gradient for {@code fade}, rebuilt only when an input changed. */
+    private void updateLensRim(float fade) {
+        if (lens.left == rimLeft && lens.top == rimTop && lens.width() == rimWidth && lens.bottom == rimBottom
+                && fade == rimFade) {
+            return;
+        }
+        rimLeft = lens.left;
+        rimTop = lens.top;
+        rimWidth = lens.width();
+        rimBottom = lens.bottom;
+        rimFade = fade;
+        rim.setShader(new LinearGradient(lens.left, lens.top, lens.left + lens.width() * 0.4f, lens.bottom,
+                new int[]{Color.argb(Math.round(0xE0 * fade), 0xFF, 0xFF, 0xFF),
+                        Color.argb(Math.round(0x10 * fade), 0xFF, 0xFF, 0xFF),
+                        Color.argb(Math.round(0x50 * fade), 0xFF, 0xFF, 0xFF)},
+                new float[]{0f, 0.55f, 1f}, Shader.TileMode.CLAMP));
     }
 
     private final Paint dropShadow = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -951,11 +974,7 @@ final class LiquidGlassLens extends View {
 
         // With the shader, Kyant's highlight is drawn inside it; otherwise a lit rim stroke.
         if (!open || shaded && !dropShaderFailed) return;
-        rim.setShader(new LinearGradient(lens.left, lens.top, lens.left + lens.width() * 0.4f, lens.bottom,
-                new int[]{Color.argb(Math.round(0xE0 * openAlpha), 0xFF, 0xFF, 0xFF),
-                        Color.argb(Math.round(0x10 * openAlpha), 0xFF, 0xFF, 0xFF),
-                        Color.argb(Math.round(0x50 * openAlpha), 0xFF, 0xFF, 0xFF)},
-                new float[]{0f, 0.55f, 1f}, Shader.TileMode.CLAMP));
+        updateLensRim(openAlpha);
         canvas.drawRoundRect(lens, r, r, rim);
     }
 
@@ -982,6 +1001,14 @@ final class LiquidGlassLens extends View {
     private final Paint glassyGloss = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint glassyRim = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final RectF gloss = new RectF();
+    /** The inputs of the capsule's body, gloss and rim gradients, which are rebuilt only when one changes. */
+    private float bodyTop = Float.NaN, bodyBottom, bodyAlpha;
+    private boolean bodyDark;
+    private float glossTop = Float.NaN, glossBottom, glossAlpha;
+    private boolean glossDark;
+    private float capRimTop = Float.NaN, capRimBottom, capRimAlpha;
+    private boolean capRimDark;
+    private final Outline clipOutline = new Outline();
 
     /**
      * The resting pill as a small piece of glass: a soft shadow under it, a body lit from above,
@@ -999,26 +1026,44 @@ final class LiquidGlassLens extends View {
                 : Color.argb(Math.round(0x70 * alpha), 0xFF, 0xFF, 0xFF);
         int bottom = dark ? Color.argb(Math.round(0x14 * alpha), 0xFF, 0xFF, 0xFF)
                 : Color.argb(Math.round(0x22 * alpha), 0, 0, 0);
-        glassyBody.setShader(new LinearGradient(0, lens.top, 0, lens.bottom, top, bottom, Shader.TileMode.CLAMP));
+        if (bodyTop != lens.top || bodyBottom != lens.bottom || bodyDark != dark || bodyAlpha != alpha) {
+            bodyTop = lens.top;
+            bodyBottom = lens.bottom;
+            bodyDark = dark;
+            bodyAlpha = alpha;
+            glassyBody.setShader(new LinearGradient(0, lens.top, 0, lens.bottom, top, bottom, Shader.TileMode.CLAMP));
+        }
         canvas.drawRoundRect(lens, r, r, glassyBody);
 
         // Gloss over the upper half.
         float inset = Math.min(r * 0.45f, 6f * density);
         gloss.set(lens.left + inset, lens.top + 1.5f * density, lens.right - inset, lens.centerY());
         float gr = gloss.height() / 2f;
-        glassyGloss.setShader(new LinearGradient(0, gloss.top, 0, gloss.bottom,
-                Color.argb(Math.round((dark ? 0x38 : 0x60) * alpha), 0xFF, 0xFF, 0xFF),
-                Color.argb(0, 0xFF, 0xFF, 0xFF), Shader.TileMode.CLAMP));
+        if (glossTop != gloss.top || glossBottom != gloss.bottom || glossDark != dark || glossAlpha != alpha) {
+            glossTop = gloss.top;
+            glossBottom = gloss.bottom;
+            glossDark = dark;
+            glossAlpha = alpha;
+            glassyGloss.setShader(new LinearGradient(0, gloss.top, 0, gloss.bottom,
+                    Color.argb(Math.round((dark ? 0x38 : 0x60) * alpha), 0xFF, 0xFF, 0xFF),
+                    Color.argb(0, 0xFF, 0xFF, 0xFF), Shader.TileMode.CLAMP));
+        }
         canvas.drawRoundRect(gloss, gr, gr, glassyGloss);
 
         // Rim: bright along the top, faint in the middle, a soft glint at the bottom.
         glassyRim.setStyle(Paint.Style.STROKE);
         glassyRim.setStrokeWidth(Math.max(1f, 1f * density));
-        glassyRim.setShader(new LinearGradient(0, lens.top, 0, lens.bottom,
-                new int[]{Color.argb(Math.round((dark ? 0x90 : 0xE0) * alpha), 0xFF, 0xFF, 0xFF),
-                        Color.argb(Math.round(0x10 * alpha), 0xFF, 0xFF, 0xFF),
-                        Color.argb(Math.round((dark ? 0x40 : 0x70) * alpha), 0xFF, 0xFF, 0xFF)},
-                new float[]{0f, 0.55f, 1f}, Shader.TileMode.CLAMP));
+        if (capRimTop != lens.top || capRimBottom != lens.bottom || capRimDark != dark || capRimAlpha != alpha) {
+            capRimTop = lens.top;
+            capRimBottom = lens.bottom;
+            capRimDark = dark;
+            capRimAlpha = alpha;
+            glassyRim.setShader(new LinearGradient(0, lens.top, 0, lens.bottom,
+                    new int[]{Color.argb(Math.round((dark ? 0x90 : 0xE0) * alpha), 0xFF, 0xFF, 0xFF),
+                            Color.argb(Math.round(0x10 * alpha), 0xFF, 0xFF, 0xFF),
+                            Color.argb(Math.round((dark ? 0x40 : 0x70) * alpha), 0xFF, 0xFF, 0xFF)},
+                    new float[]{0f, 0.55f, 1f}, Shader.TileMode.CLAMP));
+        }
         float half = glassyRim.getStrokeWidth() / 2f;
         gloss.set(lens.left + half, lens.top + half, lens.right - half, lens.bottom - half);
         canvas.drawRoundRect(gloss, r - half, r - half, glassyRim);
@@ -1108,10 +1153,7 @@ final class LiquidGlassLens extends View {
             for (int i = 0; i <= barIndex; i++) {
                 View child = parent.getChildAt(i);
                 if (child.getVisibility() != VISIBLE || child.getAlpha() == 0f || glass.isExcluded(child)) continue;
-                int save = rc.save();
-                rc.translate(child.getLeft() + child.getTranslationX(), child.getTop() + child.getTranslationY());
-                child.draw(rc);
-                rc.restoreToCount(save);
+                Siblings.draw(rc, child);
             }
             // Videos under the bar are holes in the recording: fill them, then the base.
             SurfaceSnapshots snapshots = glass.snapshots();
@@ -1129,7 +1171,7 @@ final class LiquidGlassLens extends View {
         int lw = Math.round(lens.width());
         int lh = Math.round(lens.height());
         clip.setPosition(0, 0, lw, lh);
-        Outline outline = new Outline();
+        Outline outline = clipOutline;
         outline.setRoundRect(0, 0, lw, lh, r);
         clip.setOutline(outline);
         clip.setClipToOutline(true);
